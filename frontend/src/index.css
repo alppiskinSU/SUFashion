@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-primary font-sans;
+    /* 3% grain texture */
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+    margin: 0;
+    padding: 0;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  /* Default Transitions */
+  * {
+    @apply transition-all duration-300 ease-heavy;
+  }
+
+  /* Typography shortcuts based on DESIGN.md */
+  .display-lg {
+    @apply text-[3.5rem] tracking-[-0.02em] font-serif leading-tight;
+  }
+  .body-md {
+    @apply text-[0.875rem] font-sans;
+  }
+  .label-sm {
+    @apply text-sm uppercase tracking-[0.1em] font-sans text-secondary font-medium;
+  }
+
+  /* The Glass & Soul effect */
+  .glass-panel {
+    @apply bg-surface-container-lowest/70 backdrop-blur-[20px];
+  }
+}
