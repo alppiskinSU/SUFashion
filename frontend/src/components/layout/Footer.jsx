@@ -14,23 +14,23 @@ export default function Footer() {
         </div>
         
         <div className="flex flex-col gap-4">
-          <h4 className="font-sans text-[10px] uppercase tracking-[0.2em] font-bold text-primary mb-2">Collections</h4>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">New Arrivals</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Menswear</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Womenswear</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Atelier Archives</Link>
+          <h4 className="font-sans text-xs uppercase tracking-widest font-bold text-primary mb-2">Collections</h4>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">New Arrivals</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Menswear</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Womenswear</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Atelier Archives</Link>
         </div>
 
         <div className="flex flex-col gap-4">
-          <h4 className="font-sans text-[10px] uppercase tracking-[0.2em] font-bold text-primary mb-2">Boutique</h4>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Sustainability</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Shipping & Returns</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Privacy Policy</Link>
-          <Link to="/" className="text-[10px] uppercase tracking-[0.2em] text-outline hover:text-primary transition-colors duration-300">Contact</Link>
+          <h4 className="font-sans text-xs uppercase tracking-widest font-bold text-primary mb-2">Boutique</h4>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Sustainability</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Shipping & Returns</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Privacy Policy</Link>
+          <Link to="/" className="font-sans text-xs uppercase tracking-widest font-medium text-outline hover:text-primary transition-colors duration-300">Contact</Link>
         </div>
 
         <div className="flex flex-col gap-6">
-          <h4 className="font-sans text-[10px] uppercase tracking-[0.2em] font-bold text-primary mb-2">Newsletter</h4>
+          <h4 className="font-sans text-xs uppercase tracking-widest font-bold text-primary mb-2">Newsletter</h4>
           <div className="relative">
             <input 
               type="email" 

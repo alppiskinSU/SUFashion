@@ -13,11 +13,11 @@ export default function Navbar() {
           <Link to="/" className="flex items-center">
             <img src="/sufashion-logo-w.svg" alt="SUFashion Logo" className="h-10 md:h-12 w-auto object-contain scale-[1.5] origin-left" />
           </Link>
-          <div className="hidden md:flex gap-8 items-center">
-            <Link to="/" className="text-primary border-b-2 border-primary pb-1 font-serif italic tracking-tight">New Arrivals</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors font-serif italic tracking-tight">Collections</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors font-serif italic tracking-tight">Editorial</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors font-serif italic tracking-tight">Atelier</Link>
+          <div className="hidden md:flex gap-8 items-center text-xs uppercase tracking-widest font-medium font-sans mt-1">
+            <Link to="/" className="text-primary border-b-2 border-primary pb-1">New Arrivals</Link>
+            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Collections</Link>
+            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Editorial</Link>
+            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Atelier</Link>
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">
