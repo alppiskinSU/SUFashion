@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Heart, ShoppingBag, User } from 'lucide-react';
 import QuickLookDrawer from './QuickLookDrawer';
 
 export default function Navbar() {
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <>
@@ -14,10 +15,10 @@ export default function Navbar() {
             <img src="/sufashion-logo-w.svg" alt="SUFashion Logo" className="h-10 md:h-12 w-auto object-contain scale-[1.5] origin-left" />
           </Link>
           <div className="hidden md:flex gap-8 items-center text-xs uppercase tracking-widest font-medium font-sans mt-1">
-            <Link to="/" className="text-primary border-b-2 border-primary pb-1">New Arrivals</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Collections</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Editorial</Link>
-            <Link to="/" className="text-outline hover:text-primary transition-colors pb-1 border-b-2 border-transparent">Atelier</Link>
+            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
+            <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
+            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/editorial' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Editorial</Link>
+            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/atelier' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Atelier</Link>
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">
