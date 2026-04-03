@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Lock, Truck, ShieldCheck } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -41,6 +41,7 @@ function formatExpiry(value) {
 }
 
 export default function Checkout() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', address: '', city: '', zip: '', country: '',
     cardName: '', cardNumber: '', expiry: '', cvv: '',
@@ -63,7 +64,8 @@ export default function Checkout() {
 
   function handleSubmit(e) {
     e.preventDefault();
-    alert('Order placed! (Mock — backend entegrasyon sonra yapılacak)');
+    // TODO: Replace with real API call (POST /api/orders), then navigate with real order ID
+    navigate('/order-confirmation/SUF-2024-00142');
   }
 
   return (
