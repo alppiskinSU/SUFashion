@@ -5,6 +5,8 @@ import Signup from './pages/Signup';
 import Collections from './pages/Collections';
 import Checkout from './pages/Checkout';
 import ProductDetail from './pages/ProductDetail';
+import OrderConfirmation from './pages/OrderConfirmation';
+import OrderTracking from './pages/OrderTracking';
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/product/:id" element={<ProductDetail />} />
+        <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
+        <Route path="/my-orders" element={<OrderTracking />} />
       </Routes>
     </div>
   );
