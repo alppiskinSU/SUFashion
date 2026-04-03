@@ -1,12 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Plus } from 'lucide-react';
+import { useCart } from '../../contexts/CartContext';
 
 export default function ProductCard({ 
   product, 
   doubleColumn = false, 
-  onAdd = () => {} 
+  onAdd 
 }) {
+  const { addToCart } = useCart();
+
+  const handleAdd = () => {
+    if (onAdd) { onAdd(); return; }
+    addToCart(product, 1);
+  };
   return (
     <div className={`group relative ${doubleColumn ? 'lg:col-span-2' : ''}`}>
       <div 
@@ -38,7 +45,7 @@ export default function ProductCard({
 
         {!product.isSoldOut && (
           <button 
-            onClick={onAdd}
+            onClick={handleAdd}
             className={`absolute bottom-6 right-6 w-12 h-12 flex items-center justify-center opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 z-10 ${
               product.useCartIcon ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary text-white'
             }`}

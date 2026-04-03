@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, Heart, ShoppingBag, User } from 'lucide-react';
+import { useCart } from '../../contexts/CartContext';
 import QuickLookDrawer from './QuickLookDrawer';
 
 export default function Navbar() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const location = useLocation();
+  const { cartCount } = useCart();
 
   return (
     <>
@@ -17,8 +19,7 @@ export default function Navbar() {
           <div className="hidden md:flex gap-8 items-center text-xs uppercase tracking-widest font-medium font-sans mt-1">
             <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
             <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
-            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/editorial' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Editorial</Link>
-            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/atelier' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Atelier</Link>
+            <Link to="/about" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/about' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>About</Link>
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">
@@ -33,11 +34,23 @@ export default function Navbar() {
             onClick={() => setIsCartOpen(true)}
           >
             <ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1} />
-            <span className="absolute -top-1.5 -right-1.5 bg-secondary w-4 h-4 text-[10px] flex items-center justify-center text-on-secondary-container font-bold rounded-none">2</span>
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-secondary w-4 h-4 text-[10px] flex items-center justify-center text-on-secondary-container font-bold rounded-none">{cartCount}</span>
+            )}
           </button>
-          <Link to="/login" className="hover:opacity-80 transition-opacity flex items-center justify-center">
-            <User className="w-[22px] h-[22px]" strokeWidth={1} />
-          </Link>
+          <div className="relative group">
+            <button className="hover:opacity-80 transition-opacity flex items-center justify-center">
+              <User className="w-[22px] h-[22px]" strokeWidth={1} />
+            </button>
+            <div className="absolute right-0 top-full mt-3 w-44 bg-surface-container shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <Link to="/login" className="block px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                Sign In
+              </Link>
+              <Link to="/my-orders" className="block px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                My Orders
+              </Link>
+            </div>
+          </div>
         </div>
       </nav>
 

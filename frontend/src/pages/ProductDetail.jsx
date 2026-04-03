@@ -4,29 +4,37 @@ import { ArrowLeft, ShoppingBag, Heart, Minus, Plus, Package, AlertTriangle } fr
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
+import { useCart } from '../contexts/CartContext';
 
 /* ── Mock products (fallback when API is unavailable) ── */
 const mockProducts = {
   1: {
-    id: 1, name: 'Cashmere Wrap Coat', category: 'Outerwear', price: 2450, oldPrice: null,
-    description: 'Crafted from the finest Mongolian cashmere, this wrap coat drapes with an effortless elegance. Hand-finished seams and a relaxed silhouette make it the cornerstone of any winter wardrobe.',
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9OeHNJRVwTzVFdQ5_kDymgp3PR6niaoAT_qMhe_0plRNsdnytCS3wQ5TYqN6vw14VqlVhZnPvSzmbfWBoXkUUXu3Yyk3IAaD3MWBwMklU1gxyVAM1jiNrIykmJ7gDfvSbzsCTnP6rBdGS3KRG-rEnjA5x3phC1BDUJ5naLK3owehWcdbnrJ1MvTEuPSHreVaCYge3Z8wt1_PeZ9ZG970QqI3y4XFdeiv7wHFIY6F7u6PF5WcIM3NXFcxpespGgVhslB1-HhJxRlw',
-    quantity: 12, isLimited: false, isSoldOut: false,
-    model: 'CWC-24', serial_number: 'SU-OW-001', warranty_status: '2 Year Limited', distributor_info: 'SUFashion Direct',
-  },
-  2: {
-    id: 2, name: 'Silk Evening Blouse', category: 'Tops', price: 1250, oldPrice: 1600,
+    id: 1, name: 'Silk Blouse', category: 'Tops', price: 1250, oldPrice: null,
     description: 'Pure mulberry silk with a luminous finish. Designed with a subtle drape at the shoulder and French seams throughout, this blouse moves beautifully from day to evening.',
     image: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800',
+    quantity: 8, isLimited: false, isSoldOut: false,
+    model: 'SB-24', serial_number: 'SU-TP-001', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
+  },
+  2: {
+    id: 2, name: 'Pleated Skirt', category: 'Bottoms', price: 1450, oldPrice: 1800,
+    description: 'Flowing pleats in a luxurious crepe fabric. This midi-length skirt pairs effortlessly with everything from silk camisoles to structured blazers.',
+    image: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800',
     quantity: 3, isLimited: true, isSoldOut: false,
-    model: 'SEB-24', serial_number: 'SU-TP-002', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
+    model: 'PS-24', serial_number: 'SU-BT-002', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
   },
   3: {
-    id: 3, name: 'Linen Summer Dress', category: 'Dresses', price: 2100, oldPrice: null,
+    id: 3, name: 'Linen Dress', category: 'Dresses', price: 2100, oldPrice: null,
     description: 'Airy European linen in a relaxed A-line cut. The perfect balance between structure and ease, finished with hand-stitched details at the neckline.',
     image: 'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?auto=format&fit=crop&q=80&w=800',
     quantity: 0, isLimited: false, isSoldOut: true,
-    model: 'LSD-24', serial_number: 'SU-DR-003', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
+    model: 'LD-24', serial_number: 'SU-DR-003', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
+  },
+  4: {
+    id: 4, name: 'Leather Jacket', category: 'Outerwear', price: 4500, oldPrice: null,
+    description: 'Italian lambskin leather shaped into a timeless moto silhouette. Gunmetal hardware and a tailored fit make this a statement piece for every wardrobe.',
+    image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800',
+    quantity: 5, isLimited: false, isSoldOut: false,
+    model: 'LJ-24', serial_number: 'SU-OW-004', warranty_status: '2 Year Limited', distributor_info: 'SUFashion Direct',
   },
 };
 
@@ -63,6 +71,8 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+  const { addToCart } = useCart();
 
   useEffect(() => {
     setLoading(true);
@@ -195,10 +205,14 @@ export default function ProductDetail() {
                 variant="secondary"
                 className="flex-1"
                 disabled={isSoldOut}
-                onClick={() => alert(`${qty}x ${product.name} sepete eklendi! (Mock)`)}
+                onClick={() => {
+                  addToCart(product, qty);
+                  setAdded(true);
+                  setTimeout(() => setAdded(false), 2000);
+                }}
               >
                 <ShoppingBag className="w-4 h-4" strokeWidth={1.5} />
-                {isSoldOut ? 'Out of Stock' : 'Add to Bag'}
+                {isSoldOut ? 'Out of Stock' : added ? 'Added!' : 'Add to Bag'}
               </Button>
 
               {/* Wishlist */}

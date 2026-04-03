@@ -19,8 +19,8 @@ const dummyProducts = [
     name: 'Pleated Skirt',
     price: 1450,
     category: 'bottoms',
-    image: 'https://images.unsplash.com/photo-1583496661160-c588c443c982?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1583496661160-c588c443c982?auto=format&fit=crop&q=80&w=800'
+    image: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800',
+    hoverImage: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800'
   },
   {
     id: 3,
@@ -35,8 +35,8 @@ const dummyProducts = [
     name: 'Leather Jacket',
     price: 4500,
     category: 'outerwear',
-    image: 'https://images.unsplash.com/photo-1550614000-4b9e782e4f0a?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1550614000-4b9e782e4f0a?auto=format&fit=crop&q=80&w=800'
+    image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800',
+    hoverImage: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800'
   }
 ];
 
