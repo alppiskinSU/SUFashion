@@ -5,28 +5,8 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import { useCart } from '../contexts/CartContext';
 
-/* ── Mock cart data (will be replaced with real API later) ── */
-const mockCartItems = [
-  {
-    id: 1,
-    name: 'Cashmere Wrap Coat',
-    size: 'M',
-    color: 'Oatmeal',
-    price: 2450,
-    quantity: 1,
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9OeHNJRVwTzVFdQ5_kDymgp3PR6niaoAT_qMhe_0plRNsdnytCS3wQ5TYqN6vw14VqlVhZnPvSzmbfWBoXkUUXu3Yyk3IAaD3MWBwMklU1gxyVAM1jiNrIykmJ7gDfvSbzsCTnP6rBdGS3KRG-rEnjA5x3phC1BDUJ5naLK3owehWcdbnrJ1MvTEuPSHreVaCYge3Z8wt1_PeZ9ZG970QqI3y4XFdeiv7wHFIY6F7u6PF5WcIM3NXFcxpespGgVhslB1-HhJxRlw',
-  },
-  {
-    id: 2,
-    name: 'Silk Evening Blouse',
-    size: 'S',
-    color: 'Ivory',
-    price: 1250,
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=400',
-  },
-];
 
 /* ── Helpers ── */
 function formatCardNumber(value) {
@@ -41,12 +21,13 @@ function formatExpiry(value) {
 }
 
 export default function Checkout() {
+  const { items: cartItems, cartTotal, clearCart } = useCart();
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', address: '', city: '', zip: '', country: '',
     cardName: '', cardNumber: '', expiry: '', cvv: '',
   });
 
-  const subtotal = mockCartItems.reduce((s, i) => s + i.price * i.quantity, 0);
+  const subtotal = cartTotal;
   const shipping = 0; // free shipping
   const tax = Math.round(subtotal * 0.08 * 100) / 100;
   const total = subtotal + shipping + tax;
@@ -64,6 +45,7 @@ export default function Checkout() {
   function handleSubmit(e) {
     e.preventDefault();
     alert('Order placed! (Mock — backend entegrasyon sonra yapılacak)');
+    clearCart();
   }
 
   return (
@@ -82,6 +64,14 @@ export default function Checkout() {
 
         <h1 className="font-serif italic text-4xl md:text-5xl text-primary mb-16">Checkout</h1>
 
+        {cartItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-6">
+            <p className="text-outline text-sm uppercase tracking-widest">Your bag is empty</p>
+            <Link to="/collections" className="text-primary text-xs uppercase tracking-widest font-bold underline underline-offset-4">
+              Explore Collections
+            </Link>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-16">
           {/* ────────── LEFT: Form ────────── */}
           <div className="lg:col-span-7 space-y-14">
@@ -148,7 +138,7 @@ export default function Checkout() {
 
               {/* Items */}
               <div className="space-y-8 mb-10">
-                {mockCartItems.map(item => (
+                {cartItems.map(item => (
                   <div key={item.id} className="flex gap-5 group">
                     <div className="w-20 h-24 bg-surface-container flex-none overflow-hidden">
                       <img
@@ -160,7 +150,9 @@ export default function Checkout() {
                     <div className="flex-1 flex flex-col justify-between py-0.5">
                       <div>
                         <h4 className="text-sm font-bold uppercase tracking-wider text-primary truncate">{item.name}</h4>
-                        <p className="text-[10px] text-outline uppercase tracking-widest mt-1">{item.color} / Size {item.size}</p>
+                        <p className="text-[10px] text-outline uppercase tracking-widest mt-1">
+                          {[item.color, item.size ? `Size ${item.size}` : ''].filter(Boolean).join(' / ')}
+                        </p>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {item.quantity}</span>
@@ -201,6 +193,7 @@ export default function Checkout() {
             </div>
           </aside>
         </form>
+        )}
       </main>
 
       <Footer />
