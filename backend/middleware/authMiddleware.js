@@ -1,22 +1,27 @@
-const jwt = require('jsonwebtoken');
+const { supabase } = require('../db');
 
-// Checks if the user has a valid token
-function authMiddleware(req, res, next) {
+// Checks if the user has a valid Supabase token
+async function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Token required' });
 
-  try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-  }
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+
+  req.user = user;
+  next();
 }
 
-// Checks if the user has the required role
+// Checks if the user has the required role (stored in profiles table)
 function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!roles.includes(req.user?.role))
+  return async (req, res, next) => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (!profile || !roles.includes(profile.role))
       return res.status(403).json({ error: 'Insufficient permissions' });
     next();
   };

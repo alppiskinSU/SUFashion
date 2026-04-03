@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ShoppingCart, Plus } from 'lucide-react';
 
 export default function ProductCard({ 
@@ -13,11 +14,13 @@ export default function ProductCard({
           doubleColumn ? 'aspect-[16/9]' : 'aspect-[3/4]'
         }`}
       >
-        <img 
-          src={product.image} 
-          alt={product.name} 
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-        />
+        <Link to={`/product/${product.id || 1}`}>
+          <img 
+            src={product.image} 
+            alt={product.name} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
+          />
+        </Link>
         
         {product.isSoldOut && (
           <div className="absolute inset-0 bg-primary/40 flex items-center justify-center backdrop-blur-[2px]">
@@ -53,7 +56,9 @@ export default function ProductCard({
         <div className="flex justify-between items-start gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-outline font-bold mb-1">{product.category}</p>
-            <h3 className="text-2xl font-serif italic leading-none mb-2 text-primary">{product.name}</h3>
+            <Link to={`/product/${product.id || 1}`}>
+              <h3 className="text-2xl font-serif italic leading-none mb-2 text-primary hover:opacity-80 transition-opacity">{product.name}</h3>
+            </Link>
             {product.description && (
               <p className="text-sm text-outline font-light max-w-md">{product.description}</p>
             )}
@@ -63,7 +68,9 @@ export default function ProductCard({
       ) : (
         <>
           <p className="text-[10px] uppercase tracking-[0.2em] text-outline mb-1">{product.category}</p>
-          <h3 className="text-lg font-serif italic mb-2 text-primary line-clamp-1">{product.name}</h3>
+          <Link to={`/product/${product.id || 1}`}>
+            <h3 className="text-lg font-serif italic mb-2 text-primary line-clamp-1 hover:opacity-80 transition-opacity">{product.name}</h3>
+          </Link>
           
           <div className="flex items-center gap-3">
             <p className={`text-base font-medium ${product.oldPrice ? 'text-primary' : 'text-primary'}`}>

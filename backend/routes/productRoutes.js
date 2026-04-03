@@ -1,39 +1,38 @@
 const express = require('express');
 const router = express.Router();
-const { getDB } = require('../db');
+const { supabase } = require('../db');
 
 // Get all products - supports search, sort and category filter
 router.get('/', async (req, res) => {
   try {
-    const db = getDB();
     const { search, sort, category } = req.query;
 
-    let query = `
-      SELECT 
-        id, name, category, description, price,
-        image_url AS image,
-        quantity = 0 AS isSoldOut,
-        is_limited AS isLimited,
-        old_price AS oldPrice,
-        quantity, model, serial_number, warranty_status, distributor_info
-      FROM products WHERE 1=1
-    `;
-    const params = [];
+    let query = supabase
+      .from('products')
+      .select('id, name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info, popularity');
 
     if (search) {
-      query += ' AND (name LIKE ? OR description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
     }
     if (category) {
-      query += ' AND category = ?';
-      params.push(category);
+      query = query.eq('category', category);
     }
-    if (sort === 'price_asc')  query += ' ORDER BY price ASC';
-    if (sort === 'price_desc') query += ' ORDER BY price DESC';
-    if (sort === 'popularity') query += ' ORDER BY popularity DESC';
+    if (sort === 'price_asc')  query = query.order('price', { ascending: true });
+    if (sort === 'price_desc') query = query.order('price', { ascending: false });
+    if (sort === 'popularity') query = query.order('popularity', { ascending: false });
 
-    const [products] = await db.query(query, params);
-    res.json({ products });
+    const { data: products, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const mapped = products.map(p => ({
+      ...p,
+      image: p.image_url,
+      isSoldOut: p.quantity === 0,
+      isLimited: p.is_limited,
+      oldPrice: p.old_price,
+    }));
+
+    res.json({ products: mapped });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -42,20 +41,21 @@ router.get('/', async (req, res) => {
 // Get single product by id
 router.get('/:id', async (req, res) => {
   try {
-    const db = getDB();
-    const [rows] = await db.query(
-      `SELECT 
-        id, name, category, description, price,
-        image_url AS image,
-        quantity = 0 AS isSoldOut,
-        is_limited AS isLimited,
-        old_price AS oldPrice,
-        quantity, model, serial_number, warranty_status, distributor_info
-       FROM products WHERE id = ?`,
-      [req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Product not found' });
-    res.json(rows[0]);
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('id, name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !product) return res.status(404).json({ error: 'Product not found' });
+
+    res.json({
+      ...product,
+      image: product.image_url,
+      isSoldOut: product.quantity === 0,
+      isLimited: product.is_limited,
+      oldPrice: product.old_price,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
