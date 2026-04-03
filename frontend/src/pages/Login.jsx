@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
@@ -69,6 +69,15 @@ export default function Login() {
       {/* Right Side: Login Form */}
       <section className="relative bg-surface-container-low flex items-center justify-center p-8 md:p-24 lg:p-32">
         <div className="w-full max-w-md space-y-12 z-10">
+          {/* Back to Home */}
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-outline hover:text-primary text-xs uppercase tracking-widest font-bold group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" strokeWidth={1.5} />
+            Back to Home
+          </Link>
+
           {/* Header */}
           <header className="space-y-4">
             <div className="md:hidden mb-8">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, ArrowRight } from 'lucide-react';
+import { Check, ArrowRight, ArrowLeft } from 'lucide-react';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
@@ -90,6 +90,15 @@ export default function Signup() {
       {/* Right Side: Signup Form */}
       <section className="relative w-full md:w-7/12 lg:w-1/2 bg-surface-container-low flex items-center justify-center p-6 md:p-12 lg:p-20 overflow-y-auto hidden-scrollbar">
         <div className="w-full max-w-xl z-10">
+          {/* Back to Home */}
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-outline hover:text-primary text-xs uppercase tracking-widest font-bold group mb-10 block"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" strokeWidth={1.5} />
+            Back to Home
+          </Link>
+
           {/* Header */}
           <header className="mb-12">
             <div className="md:hidden mb-8">
