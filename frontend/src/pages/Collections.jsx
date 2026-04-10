@@ -4,58 +4,48 @@ import Footer from '../components/layout/Footer';
 import CollectionHero from '../components/collections/CollectionHero';
 import CollectionFilter from '../components/collections/CollectionFilter';
 import CollectionGrid from '../components/collections/CollectionGrid';
-
-const dummyProducts = [
-  {
-    id: 1,
-    name: 'Silk Blouse',
-    price: 1250,
-    category: 'tops',
-    image: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800'
-  },
-  {
-    id: 2,
-    name: 'Pleated Skirt',
-    price: 1450,
-    category: 'bottoms',
-    image: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800'
-  },
-  {
-    id: 3,
-    name: 'Linen Dress',
-    price: 2100,
-    category: 'dresses',
-    image: 'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?auto=format&fit=crop&q=80&w=800'
-  },
-  {
-    id: 4,
-    name: 'Leather Jacket',
-    price: 4500,
-    category: 'outerwear',
-    image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800',
-    hoverImage: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800'
-  }
-];
+import { supabase } from '../lib/supabase';
 
 export default function Collections() {
-  const [products, setProducts] = useState(dummyProducts);
-  const [filteredProducts, setFilteredProducts] = useState(dummyProducts);
+  const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
 
   useEffect(() => {
-    // Attempt to fetch from API but fallback to dummy if needed
-    fetch('http://localhost:3000/api/products')
-      .then(res => res.json())
-      .then(data => {
-        if (data.products && data.products.length > 0) {
-          setProducts(data.products);
-          setFilteredProducts(data.products);
-        }
+    const fetchProducts = async () => {
+      const { data, error } = await supabase.from('products').select('*');
+      if (!error && data) {
+        const mappedData = data.map(mapProductData);
+        setProducts(mappedData);
+        setFilteredProducts(mappedData);
+      } else {
+        console.error('Supabase error:', error);
+      }
+    };
+    
+    fetchProducts();
+
+    const channel = supabase
+      .channel('public:products:collections')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
+        console.log('Real-time product change:', payload);
+        fetchProducts(); // Simple refetch on any change
       })
-      .catch(err => console.error('API error, using fallback:', err));
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  // Helper to match components' expected data structure
+  const mapProductData = (p) => ({
+    ...p,
+    image: p.image_url,
+    hoverImage: p.image_url, // fallback
+    isSoldOut: p.quantity === 0,
+    isLimited: p.is_limited,
+    oldPrice: p.old_price,
+  });
 
   const categories = [
     { id: 'dresses', label: 'Dresses' },
@@ -68,7 +58,9 @@ export default function Collections() {
     if (categoryId === 'all') {
       setFilteredProducts(products);
     } else {
-      setFilteredProducts(products.filter(p => p.category === categoryId));
+      setFilteredProducts(products.filter(p => 
+        p.category && p.category.toLowerCase() === categoryId.toLowerCase()
+      ));
     }
   };
 
