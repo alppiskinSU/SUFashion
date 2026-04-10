@@ -46,8 +46,43 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (insertError) throw insertError;
 
-    res.status(201).json({ message: 'Order created successfully!', total_price });
+      res.status(201).json({ message: 'Order created successfully!', total_price });
 
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get a single order by ID (for OrderConfirmation page)
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*, products(name, price, image_url)')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (error || !order) return res.status(404).json({ error: 'Order not found' });
+
+    res.json({ order });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all orders for the logged-in user (for OrderTracking page)
+router.get('/user/me', authMiddleware, async (req, res) => {
+  try {
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, products(name, price, image_url)')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ orders });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,44 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
-
-/* ── Mock orders data (replace with real API: GET /api/orders/user/:userId) ── */
-const mockOrders = [
-  {
-    id: 'SUF-2024-00142',
-    date: 'April 3, 2026',
-    status: 'processing',
-    total: 3916.00,
-    items: [
-      { id: 1, name: 'Cashmere Wrap Coat', size: 'M', color: 'Oatmeal', price: 2450, quantity: 1,
-        image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9OeHNJRVwTzVFdQ5_kDymgp3PR6niaoAT_qMhe_0plRNsdnytCS3wQ5TYqN6vw14VqlVhZnPvSzmbfWBoXkUUXu3Yyk3IAaD3MWBwMklU1gxyVAM1jiNrIykmJ7gDfvSbzsCTnP6rBdGS3KRG-rEnjA5x3phC1BDUJ5naLK3owehWcdbnrJ1MvTEuPSHreVaCYge3Z8wt1_PeZ9ZG970QqI3y4XFdeiv7wHFIY6F7u6PF5WcIM3NXFcxpespGgVhslB1-HhJxRlw' },
-      { id: 2, name: 'Silk Evening Blouse', size: 'S', color: 'Ivory', price: 1250, quantity: 1,
-        image: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=400' },
-    ],
-  },
-  {
-    id: 'SUF-2024-00118',
-    date: 'March 15, 2026',
-    status: 'in-transit',
-    total: 890.00,
-    items: [
-      { id: 3, name: 'Linen Wide-Leg Trousers', size: 'M', color: 'Sand', price: 890, quantity: 1,
-        image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=400' },
-    ],
-  },
-  {
-    id: 'SUF-2024-00091',
-    date: 'February 28, 2026',
-    status: 'delivered',
-    total: 3200.00,
-    items: [
-      { id: 4, name: 'Merino Turtleneck', size: 'S', color: 'Noir', price: 1600, quantity: 2,
-        image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&q=80&w=400' },
-    ],
-  },
-];
 
 /* ── Status config ── */
 const STATUS_STEPS = ['processing', 'in-transit', 'delivered'];
@@ -105,11 +69,11 @@ function OrderCard({ order }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
-            <p className="text-sm text-primary">{order.date}</p>
+            <p className="text-sm text-primary">{order.created_at ? new Date(order.created_at).toLocaleDateString() : '—'}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Total</p>
-            <p className="text-sm text-primary">${fmt(order.total)}</p>
+            <p className="text-sm text-primary">${fmt(order.total_price)}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Status</p>
@@ -139,29 +103,22 @@ function OrderCard({ order }) {
           {/* Items */}
           <div className="mt-10 space-y-6">
             <p className="text-[10px] uppercase tracking-widest text-outline">Items</p>
-            {order.items.map(item => (
-              <div key={item.id} className="flex gap-5 group/item">
-                <div className="w-16 h-20 bg-surface-container flex-none overflow-hidden">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-full h-full object-cover grayscale group-hover/item:grayscale-0 transition-all duration-700"
-                  />
-                </div>
-                <div className="flex-1 flex flex-col justify-between py-0.5">
-                  <div>
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-primary">{item.name}</h4>
-                    <p className="text-[10px] text-outline uppercase tracking-widest mt-1">
-                      {item.color} / Size {item.size}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {item.quantity}</span>
-                    <span className="text-sm font-medium text-primary">${fmt(item.price * item.quantity)}</span>
-                  </div>
+            <div className="flex gap-5 group/item">
+              <div className="w-16 h-20 bg-surface-container flex-none overflow-hidden">
+                <img
+                  src={order.products?.image_url}
+                  alt={order.products?.name}
+                  className="w-full h-full object-cover grayscale group-hover/item:grayscale-0 transition-all duration-700"
+                />
+              </div>
+              <div className="flex-1 flex flex-col justify-between py-0.5">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-primary">{order.products?.name}</h4>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {order.quantity}</span>
+                  <span className="text-sm font-medium text-primary">${fmt(order.products?.price * order.quantity)}</span>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
 
           {/* View invoice link */}
@@ -180,14 +137,25 @@ function OrderCard({ order }) {
 }
 
 export default function OrderTracking() {
-  // TODO: Replace with real API call when backend is ready:
-  // const [orders, setOrders] = useState([]);
-  // useEffect(() => {
-  //   fetch(`/api/orders/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } })
-  //     .then(r => r.json()).then(data => setOrders(data.orders));
-  // }, []);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const orders = mockOrders;
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:3000/api/orders/user/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setOrders(data.orders ?? []))
+      .catch(() => setOrders([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-surface">
+      <p className="text-outline text-xs uppercase tracking-widest">Loading orders...</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
