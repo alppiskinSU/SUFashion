@@ -11,7 +11,7 @@ router.post('/', authMiddleware, async (req, res) => {
     // 1. Check if the product exists and get its stock/price
     const { data: product, error: fetchError } = await supabase
       .from('products')
-      .select('stock, price')
+      .select('quantity, price')
       .eq('id', product_id)
       .single();
 
@@ -19,17 +19,17 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    // 2. Check if there is enough 
-    if (product.stock < quantity) {
+    // 2. Check if there is enough stock
+    if (product.quantity < quantity) {
       return res.status(400).json({ error: 'Not enough stock available' });
     }
 
     const total_price = product.price * quantity;
 
-    // 3. Reduce the stock 
+    // 3. Reduce the stock
     const { error: updateError } = await supabase
       .from('products')
-      .update({ stock: product.stock - quantity })
+      .update({ quantity: product.quantity - quantity })
       .eq('id', product_id);
 
     if (updateError) throw updateError;
