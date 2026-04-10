@@ -43,11 +43,34 @@ export default function Checkout() {
     setForm(p => ({ ...p, [id]: value }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    // TODO: Replace with real API call (POST /api/orders), then navigate with real order ID
-    clearCart();
-    navigate('/order-confirmation/SUF-2024-00142');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      let lastOrderId = null;
+      for (const item of cartItems) {
+        const res = await fetch('http://localhost:3000/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ product_id: item.product_id ?? item.id, quantity: item.quantity }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Order failed');
+        if (data.order_id) lastOrderId = data.order_id;
+      }
+      clearCart();
+      navigate(lastOrderId ? `/order-confirmation/${lastOrderId}` : '/my-orders');
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   return (

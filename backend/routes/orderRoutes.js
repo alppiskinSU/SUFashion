@@ -35,18 +35,20 @@ router.post('/', authMiddleware, async (req, res) => {
     if (updateError) throw updateError;
 
     // 4. Create the new order
-    const { error: insertError } = await supabase
+    const { data: newOrder, error: insertError } = await supabase
       .from('orders')
-      .insert([{ 
-        user_id: user_id, 
-        product_id: product_id, 
-        quantity: quantity, 
-        total_price: total_price 
-      }]);
+      .insert([{
+        user_id: user_id,
+        product_id: product_id,
+        quantity: quantity,
+        total_price: total_price
+      }])
+      .select('id')
+      .single();
 
     if (insertError) throw insertError;
 
-      res.status(201).json({ message: 'Order created successfully!', total_price });
+    res.status(201).json({ message: 'Order created successfully!', total_price, order_id: newOrder.id });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
