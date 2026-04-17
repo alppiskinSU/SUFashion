@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CheckCircle, Printer, ArrowLeft, Package } from 'lucide-react';
+import { CheckCircle, Printer, ArrowLeft, Package, Mail } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
@@ -12,6 +13,8 @@ export default function OrderConfirmation() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [invoiceEmail, setInvoiceEmail] = useState('');
+  const [emailStatus, setEmailStatus] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -167,6 +170,50 @@ export default function OrderConfirmation() {
               </div>
               <p className="text-2xl font-medium text-primary">${fmt(order.total_price)}</p>
               <p className="text-[10px] uppercase tracking-widest text-outline mt-2">Incl. tax & complimentary shipping</p>
+            </div>
+
+            {/* Send invoice via email */}
+            <div className="bg-surface-container-low p-8 md:p-10">
+              <div className="flex items-center gap-3 mb-6">
+                <Mail className="w-5 h-5 text-primary" strokeWidth={1} />
+                <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Email Invoice</h2>
+              </div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!invoiceEmail) return;
+                setEmailStatus('sending');
+                try {
+                  const token = localStorage.getItem('token');
+                  const res = await fetch(`http://localhost:3000/api/invoice/${orderId}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ email: invoiceEmail }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error);
+                  setEmailStatus('sent');
+                } catch (err) {
+                  setEmailStatus('error');
+                }
+              }}>
+                <Input
+                  label="Email Address"
+                  id="invoiceEmail"
+                  type="email"
+                  value={invoiceEmail}
+                  onChange={(e) => setInvoiceEmail(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={emailStatus === 'sending'}
+                  className="mt-4 w-full py-3 text-[10px] uppercase tracking-widest font-bold bg-primary text-white hover:brightness-95 transition-all disabled:opacity-50"
+                >
+                  {emailStatus === 'sending' ? 'Sending...' : emailStatus === 'sent' ? 'Sent!' : 'Send Invoice'}
+                </button>
+                {emailStatus === 'error' && (
+                  <p className="text-red-500 text-[10px] uppercase tracking-widest mt-2">Failed to send. Try again.</p>
+                )}
+              </form>
             </div>
 
             {/* CTA buttons */}

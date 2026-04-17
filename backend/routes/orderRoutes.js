@@ -27,12 +27,17 @@ router.post('/', authMiddleware, async (req, res) => {
     const total_price = product.price * quantity;
 
     // 3. Reduce the stock
-    const { error: updateError } = await supabase
+    const newQty = product.quantity - quantity;
+    const { data: updatedRows, error: updateError } = await supabase
       .from('products')
-      .update({ quantity: product.quantity - quantity })
-      .eq('id', product_id);
+      .update({ quantity: newQty })
+      .eq('id', product_id)
+      .select('id, quantity');
 
     if (updateError) throw updateError;
+    if (!updatedRows || updatedRows.length === 0) {
+      return res.status(500).json({ error: 'Stock update failed — no rows updated. Check Supabase RLS policies on products table.' });
+    }
 
     // 4. Create the new order
     const { data: newOrder, error: insertError } = await supabase
