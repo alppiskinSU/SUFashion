@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+<<<<<<< HEAD
 const { supabase } = require('../db');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { generateInvoicePdf } = require('../utils/pdfGenerator');

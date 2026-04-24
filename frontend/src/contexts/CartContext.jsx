@@ -13,10 +13,13 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback((product, qty = 1) => {
     setItems(prev => {
+      const stock = product.quantity ?? 99;
       const existing = prev.find(i => i.id === product.id);
       if (existing) {
+        const newQty = Math.min(existing.quantity + qty, stock);
+        if (newQty === existing.quantity) return prev;
         return prev.map(i =>
-          i.id === product.id ? { ...i, quantity: i.quantity + qty } : i
+          i.id === product.id ? { ...i, quantity: newQty } : i
         );
       }
       return [...prev, {
@@ -27,8 +30,8 @@ export function CartProvider({ children }) {
         category: product.category,
         size: product.size || 'One Size',
         color: product.color || '',
-        quantity: qty,
-        stock: product.quantity ?? 99,
+        quantity: Math.min(qty, stock),
+        stock,
       }];
     });
   }, []);
@@ -39,7 +42,9 @@ export function CartProvider({ children }) {
 
   const updateQuantity = useCallback((id, newQty) => {
     if (newQty < 1) return removeFromCart(id);
-    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: newQty } : i));
+    setItems(prev => prev.map(i =>
+      i.id === id ? { ...i, quantity: Math.min(newQty, i.stock) } : i
+    ));
   }, [removeFromCart]);
 
   const clearCart = useCallback(() => setItems([]), []);

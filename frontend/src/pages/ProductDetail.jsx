@@ -5,38 +5,7 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import { useCart } from '../contexts/CartContext';
-
-/* ── Mock products (fallback when API is unavailable) ── */
-const mockProducts = {
-  1: {
-    id: 1, name: 'Silk Blouse', category: 'Tops', price: 1250, oldPrice: null,
-    description: 'Pure mulberry silk with a luminous finish. Designed with a subtle drape at the shoulder and French seams throughout, this blouse moves beautifully from day to evening.',
-    image: 'https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800',
-    quantity: 8, isLimited: false, isSoldOut: false,
-    model: 'SB-24', serial_number: 'SU-TP-001', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
-  },
-  2: {
-    id: 2, name: 'Pleated Skirt', category: 'Bottoms', price: 1450, oldPrice: 1800,
-    description: 'Flowing pleats in a luxurious crepe fabric. This midi-length skirt pairs effortlessly with everything from silk camisoles to structured blazers.',
-    image: 'https://images.unsplash.com/photo-1592301933927-35b597393c0a?auto=format&fit=crop&q=80&w=800',
-    quantity: 3, isLimited: true, isSoldOut: false,
-    model: 'PS-24', serial_number: 'SU-BT-002', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
-  },
-  3: {
-    id: 3, name: 'Linen Dress', category: 'Dresses', price: 2100, oldPrice: null,
-    description: 'Airy European linen in a relaxed A-line cut. The perfect balance between structure and ease, finished with hand-stitched details at the neckline.',
-    image: 'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?auto=format&fit=crop&q=80&w=800',
-    quantity: 0, isLimited: false, isSoldOut: true,
-    model: 'LD-24', serial_number: 'SU-DR-003', warranty_status: '1 Year Limited', distributor_info: 'SUFashion Direct',
-  },
-  4: {
-    id: 4, name: 'Leather Jacket', category: 'Outerwear', price: 4500, oldPrice: null,
-    description: 'Italian lambskin leather shaped into a timeless moto silhouette. Gunmetal hardware and a tailored fit make this a statement piece for every wardrobe.',
-    image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800',
-    quantity: 5, isLimited: false, isSoldOut: false,
-    model: 'LJ-24', serial_number: 'SU-OW-004', warranty_status: '2 Year Limited', distributor_info: 'SUFashion Direct',
-  },
-};
+import { supabase } from '../lib/supabase';
 
 /* ── Stock badge component ── */
 function StockBadge({ quantity }) {
@@ -75,15 +44,42 @@ export default function ProductDetail() {
   const { addToCart } = useCart();
 
   useEffect(() => {
-    setLoading(true);
-    // Try API first, fall back to mock
-    fetch(`http://localhost:3000/api/products/${id}`)
-      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-      .then(data => { setProduct(data); setLoading(false); })
-      .catch(() => {
-        setProduct(mockProducts[id] || mockProducts[1]);
-        setLoading(false);
-      });
+    const fetchProduct = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (!error && data) {
+        setProduct({
+          ...data,
+          image: data.image_url,
+          isSoldOut: data.quantity === 0,
+          isLimited: data.is_limited,
+          oldPrice: data.old_price,
+        });
+      } else {
+        setProduct(null);
+        console.error('Supabase error:', error);
+      }
+      setLoading(false);
+    };
+
+    fetchProduct();
+
+    const channel = supabase
+      .channel(`public:products:detail:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `id=eq.${id}` }, (payload) => {
+        console.log('Real-time product change:', payload);
+        fetchProduct(); // Simple refetch on any change
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   if (loading) {
