@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShoppingBag, Heart, Minus, Plus, Package, AlertTriangle } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -37,11 +37,54 @@ function StockBadge({ quantity }) {
 
 export default function ProductDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const { addToCart } = useCart();
+
+  useEffect(() => {
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      try { setCurrentUser(JSON.parse(stored)); } catch { setCurrentUser(null); }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id || !product?.id) return;
+    const controller = new AbortController();
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:3000/api/favorites/check/${product.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => setIsFavorited(!!data.isFavorited))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [currentUser?.id, product?.id]);
+
+  const toggleFavorite = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    const next = !isFavorited;
+    setIsFavorited(next);
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:3000/api/favorites/${product.id}`, {
+        method: isFavorited ? 'DELETE' : 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) setIsFavorited(!next);
+    } catch {
+      setIsFavorited(!next);
+    }
+  };
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -212,8 +255,16 @@ export default function ProductDetail() {
               </Button>
 
               {/* Wishlist */}
-              <button className="w-12 h-12 flex items-center justify-center border border-outline-variant text-outline hover:text-primary hover:border-primary">
-                <Heart className="w-5 h-5" strokeWidth={1} />
+              <button
+                onClick={toggleFavorite}
+                className="w-12 h-12 flex items-center justify-center border border-outline-variant hover:border-primary transition-colors"
+              >
+                <Heart
+                  className="w-5 h-5 transition-colors"
+                  strokeWidth={1}
+                  fill={isFavorited ? 'currentColor' : 'none'}
+                  style={{ color: isFavorited ? '#e11d48' : undefined }}
+                />
               </button>
             </div>
 

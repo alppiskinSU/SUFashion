@@ -9,6 +9,7 @@ import OrderConfirmation from './pages/OrderConfirmation';
 import OrderTracking from './pages/OrderTracking';
 import About from './pages/About';
 import Search from './pages/Search';
+import Favorites from './pages/Favorites';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/my-orders" element={<OrderTracking />} />
         <Route path="/about" element={<About />} />
         <Route path="/search" element={<Search />} />
+        <Route path="/favorites" element={<Favorites />} />
       </Routes>
     </div>
   );

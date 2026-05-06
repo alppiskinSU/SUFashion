@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Heart, ShoppingBag, User, LogOut, Package } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
@@ -47,7 +47,10 @@ export default function Navbar() {
           >
             <Search className="w-[22px] h-[22px]" strokeWidth={1} />
           </button>
-          <button className="hover:opacity-80 transition-opacity relative flex items-center justify-center">
+          <button
+            onClick={() => navigate('/favorites')}
+            className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
+          >
             <Heart className="w-[22px] h-[22px]" strokeWidth={1} />
           </button>
           <button 
