@@ -47,13 +47,15 @@ router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) =
 
 // Helper: has the current user actually purchased this product? Cancelled
 // orders don't count as a purchase.
-async function userHasPurchased(userId, productId) {
+async function userHasReceivedProduct(userId, productId) {
+  const pid = parseInt(productId, 10);
+  if (isNaN(pid)) return false;
   const { data, error } = await supabase
     .from('orders')
-    .select('id, status')
+    .select('id')
     .eq('user_id', userId)
-    .eq('product_id', productId)
-    .neq('status', 'cancelled')
+    .eq('product_id', pid)
+    .eq('status', 'delivered')
     .limit(1);
   if (error) throw error;
   return Array.isArray(data) && data.length > 0;
@@ -63,7 +65,7 @@ async function userHasPurchased(userId, productId) {
 // whether to show the review form. Returns { canReview: boolean }.
 router.get('/can-review/:product_id', authMiddleware, async (req, res) => {
   try {
-    const canReview = await userHasPurchased(req.user.id, req.params.product_id);
+    const canReview = await userHasReceivedProduct(req.user.id, req.params.product_id);
     res.json({ canReview });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -81,7 +83,7 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 
     // Reviews are reserved for actual buyers — server-side guard so it can't
     // be bypassed even if the UI is tampered with.
-    const purchased = await userHasPurchased(req.user.id, req.params.product_id);
+    const purchased = await userHasReceivedProduct(req.user.id, req.params.product_id);
     if (!purchased) {
       return res.status(403).json({
         error: 'You can only review products you have purchased.',
@@ -92,7 +94,7 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 
     const { error } = await supabase.from('reviews').insert({
       user_id: req.user.id,
-      product_id: req.params.product_id,
+      product_id: parseInt(req.params.product_id, 10),
       rating,
       comment: hasComment ? comment : null,
       // Rating-only submissions count as approved (so the rating shows up

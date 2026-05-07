@@ -23,7 +23,7 @@ export function useCart() {
  */
 function getActiveCartKey() {
   try {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     if (!stored) return null;
     const user = JSON.parse(stored);
     return user?.id ? `cart:${user.id}` : null;

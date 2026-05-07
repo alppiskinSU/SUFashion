@@ -1,7 +1,7 @@
 const BASE = 'http://localhost:3000';
 
 async function refreshAccessToken() {
-  const refreshToken = localStorage.getItem('refreshToken');
+  const refreshToken = sessionStorage.getItem('refreshToken');
   if (!refreshToken) return null;
 
   const res = await fetch(`${BASE}/api/auth/refresh`, {
@@ -11,20 +11,20 @@ async function refreshAccessToken() {
   });
 
   if (!res.ok) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
     return null;
   }
 
   const data = await res.json();
-  localStorage.setItem('token', data.token);
-  if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+  sessionStorage.setItem('token', data.token);
+  if (data.refreshToken) sessionStorage.setItem('refreshToken', data.refreshToken);
   return data.token;
 }
 
 export async function authFetch(url, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   const res = await fetch(url, {
     ...options,
     headers: { ...options.headers, Authorization: `Bearer ${token}` },

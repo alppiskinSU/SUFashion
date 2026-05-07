@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 export default function RequireAuth({ children }) {
   const location = useLocation();
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('token') : null;
 
   if (!token) {
     if (typeof window !== 'undefined') {

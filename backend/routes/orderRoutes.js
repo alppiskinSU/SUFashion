@@ -63,6 +63,19 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (insertError) throw insertError;
 
+    // 5. Recalculate product popularity (total non-cancelled orders × 10)
+    const { data: orderStats } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('product_id', product_id)
+      .neq('status', 'cancelled');
+
+    const orderCount = orderStats?.length ?? 0;
+    await supabase
+      .from('products')
+      .update({ popularity: orderCount * 10 })
+      .eq('id', product_id);
+
     res.status(201).json({ message: 'Order created successfully!', total_price, order_id: newOrder.id });
 
   } catch (err) {

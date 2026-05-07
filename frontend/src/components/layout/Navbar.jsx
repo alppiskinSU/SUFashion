@@ -12,7 +12,7 @@ export default function Navbar() {
   const { cartCount } = useCart();
 
   useEffect(() => {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     if (stored) {
       try { setUser(JSON.parse(stored)); } catch { setUser(null); }
     } else {
@@ -21,9 +21,9 @@ export default function Navbar() {
   }, [location]);
 
   const handleSignOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
     setUser(null);
     // Tell CartContext (and anything else) the active user just changed
     window.dispatchEvent(new Event('auth-changed'));

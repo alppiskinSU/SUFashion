@@ -15,7 +15,7 @@ export async function placeOrder(cartItems) {
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
     throw new Error('Your bag is empty.');
   }
-  if (!localStorage.getItem('token')) {
+  if (!sessionStorage.getItem('token')) {
     const err = new Error('You must be logged in to place an order.');
     err.code = 'UNAUTHENTICATED';
     throw err;

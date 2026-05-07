@@ -22,19 +22,23 @@ router.post('/register', async (req, res) => {
     // fails (e.g. RLS policy), the auth user is already created — we log the
     // issue, warn the client, but treat the signup itself as successful so
     // the user isn't left in limbo. Login will lazily backfill the profile.
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert(
-        { id: data.user.id, name, home_address, tax_id, role: 'customer' },
-        { onConflict: 'id' }
-      );
+    const profileData = { id: data.user.id, name, home_address, tax_id, role: 'customer' };
 
-    if (profileError) {
-      console.warn('[register] profile upsert failed, continuing:', profileError.message);
-      return res.status(201).json({
-        message: 'Registration successful',
-        warning: 'Profile details could not be saved automatically — you can update them after signing in.',
-      });
+    // Try insert first (no trigger row yet)
+    const { error: insertError } = await supabase
+      .from('profiles')
+      .insert(profileData);
+
+    if (insertError) {
+      // Row already exists (trigger created it) — update instead
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ name, home_address, tax_id, role: 'customer' })
+        .eq('id', data.user.id);
+
+      if (updateError) {
+        console.warn('[register] profile update failed:', updateError.message);
+      }
     }
 
     res.status(201).json({ message: 'Registration successful' });

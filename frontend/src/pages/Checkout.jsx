@@ -83,7 +83,7 @@ export default function Checkout() {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
     if (submitting) return;
 
-    if (!localStorage.getItem('token')) {
+    if (!sessionStorage.getItem('token')) {
       sessionStorage.setItem('postLoginRedirect', '/checkout');
       navigate('/login', { state: { from: '/checkout' } });
       return;

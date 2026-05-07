@@ -31,7 +31,7 @@ function StockBadge({ quantity }) {
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200">
       <Package className="w-3.5 h-3.5 text-emerald-600" strokeWidth={1.5} />
-      <span className="text-[11px] uppercase tracking-widest font-bold text-emerald-700">In Stock</span>
+      <span className="text-[11px] uppercase tracking-widest font-bold text-emerald-700">In Stock — {quantity} available</span>
     </div>
   );
 }
@@ -102,7 +102,7 @@ export default function ProductDetail() {
 
   /* load user from localStorage */
   useEffect(() => {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     if (stored) {
       try { setCurrentUser(JSON.parse(stored)); } catch { setCurrentUser(null); }
     }
@@ -225,14 +225,10 @@ export default function ProductDetail() {
     if (reviewForm.rating === 0) return;
     setSubmitting(true);
     setSubmitMsg('');
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:3000/api/reviews/${id}`, {
+      const res = await authFetch(`http://localhost:3000/api/reviews/${id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating: reviewForm.rating, comment: reviewForm.comment }),
       });
       const data = await res.json();

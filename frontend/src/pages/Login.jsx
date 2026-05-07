@@ -38,9 +38,9 @@ export default function Login() {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('refreshToken', data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      sessionStorage.setItem('token', data.token);
+      sessionStorage.setItem('refreshToken', data.refreshToken);
+      sessionStorage.setItem('user', JSON.stringify(data.user));
       sessionStorage.removeItem('postLoginRedirect');
       // Notify in-tab listeners (e.g. CartContext) that the active user changed
       window.dispatchEvent(new Event('auth-changed'));

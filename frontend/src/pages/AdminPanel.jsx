@@ -56,7 +56,7 @@ export default function AdminPanel() {
 
   /* ── Auth guard ── */
   useEffect(() => {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     if (!stored) { navigate('/login'); return; }
     try {
       const user = JSON.parse(stored);
@@ -98,25 +98,14 @@ export default function AdminPanel() {
 
   useEffect(() => { fetchReviews(); fetchOrders(); }, []);
 
-  // Auto-refresh while the admin tab is active so newly submitted comments
-  // show up without a manual refresh.
+  // Refetch when the browser tab regains focus (no polling timer).
   useEffect(() => {
-    const POLL_MS = 8000;
-    const tick = () => {
-      if (document.visibilityState !== 'visible') return;
+    const onFocus = () => {
       if (tab === 'comments') fetchReviews();
       if (tab === 'orders')   fetchOrders();
     };
-    const interval = setInterval(tick, POLL_MS);
-    const onVisibility = () => { if (document.visibilityState === 'visible') tick(); };
-    const onFocus = () => tick();
-    document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', onFocus);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('focus', onFocus);
-    };
+    return () => window.removeEventListener('focus', onFocus);
   }, [tab]);
 
   // Refetch whenever the user switches to a tab so it always reflects the

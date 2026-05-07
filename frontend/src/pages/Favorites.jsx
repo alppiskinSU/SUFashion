@@ -77,7 +77,7 @@ export default function Favorites() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
+    const user = sessionStorage.getItem('user');
     if (!user) {
       navigate('/login');
       return;

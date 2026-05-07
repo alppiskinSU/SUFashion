@@ -11,7 +11,7 @@ export default function QuickLookDrawer({ isOpen, onClose }) {
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
   const handleCheckout = () => {
-    const isLoggedIn = !!localStorage.getItem('token');
+    const isLoggedIn = !!sessionStorage.getItem('token');
     if (!isLoggedIn) {
       setShowLoginPrompt(true);
     } else {
