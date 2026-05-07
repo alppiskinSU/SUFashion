@@ -42,6 +42,8 @@ export default function Login() {
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       sessionStorage.removeItem('postLoginRedirect');
+      // Notify in-tab listeners (e.g. CartContext) that the active user changed
+      window.dispatchEvent(new Event('auth-changed'));
       navigate(redirectTo, { replace: true });
     } catch {
       setError('Could not connect to server. Please try again.');
