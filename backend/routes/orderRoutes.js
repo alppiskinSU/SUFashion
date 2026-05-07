@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db'); 
-const { authMiddleware } = require('../middleware/authMiddleware'); 
+const { authMiddleware, requireRole } = require('../middleware/authMiddleware'); 
 
 /* ── Status constants ──
  * DB CHECK constraint accepts: processing, shipped, delivered, cancelled
@@ -106,7 +106,7 @@ router.get('/user/me', authMiddleware, async (req, res) => {
 });
 
 // GET /api/orders/admin/all — all orders (admin only)
-router.get('/admin/all', authMiddleware, async (_req, res) => {
+router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res) => {
   try {
     const { data: orders, error } = await supabase
       .from('orders')
@@ -123,7 +123,7 @@ router.get('/admin/all', authMiddleware, async (_req, res) => {
 // ── NEW: Update order status ──
 // PATCH /api/orders/:id/status
 // Body: { "status": "shipped" } or { "status": "in-transit" } (alias)
-router.patch('/:id/status', authMiddleware, async (req, res) => {
+router.patch('/:id/status', authMiddleware, requireRole('admin'), async (req, res) => {
   let { status } = req.body;
   const orderId = req.params.id;
 

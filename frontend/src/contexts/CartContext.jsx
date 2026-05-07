@@ -57,8 +57,30 @@ export function CartProvider({ children }) {
       const nextKey = getActiveCartKey();
       setCartKey(prevKey => {
         if (prevKey === nextKey) return prevKey;
-        skipNextPersist.current = true;
-        setItems(readCart(nextKey));
+        
+        setItems(prevItems => {
+          const userItems = readCart(nextKey);
+          
+          // If transitioning from guest (null key) with items to a logged-in user, merge items
+          if (prevKey === null && prevItems.length > 0) {
+            const merged = [...userItems];
+            for (const item of prevItems) {
+              const existing = merged.find(i => i.id === item.id);
+              if (existing) {
+                existing.quantity = Math.min(existing.quantity + item.quantity, item.stock || 99);
+              } else {
+                merged.push(item);
+              }
+            }
+            // We merged new items, so DO NOT skip the next persist! We want to save this to localStorage.
+            skipNextPersist.current = false;
+            return merged;
+          }
+          
+          skipNextPersist.current = true;
+          return userItems;
+        });
+
         return nextKey;
       });
     };
