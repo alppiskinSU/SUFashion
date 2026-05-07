@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, User, LogOut, Package } from 'lucide-react';
+import { Search, Heart, ShoppingBag, User, LogOut, Package, Shield } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import QuickLookDrawer from './QuickLookDrawer';
 
@@ -77,6 +77,12 @@ export default function Navbar() {
                     <p className="text-[10px] uppercase tracking-widest text-outline">Signed in as</p>
                     <p className="text-[11px] font-bold text-primary truncate mt-0.5">{user.name || user.email}</p>
                   </div>
+                  {user.role === 'admin' && (
+                    <Link to="/admin" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                      <Shield className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      Admin Panel
+                    </Link>
+                  )}
                   <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
                     <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
                     My Orders

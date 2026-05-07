@@ -3,6 +3,35 @@ const router = express.Router();
 const { supabase } = require('../db');
 const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
 
+// ─── STATIC ROUTES FIRST (before :param routes) ───
+
+// GET /api/reviews/pending — list all pending reviews (admin only)
+router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) => {
+  try {
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('*, profiles(name), products(name)')
+      .eq('approved', false)
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const mapped = reviews.map(r => ({
+      ...r,
+      user_name: r.profiles?.name || 'Anonymous',
+      product_name: r.products?.name || 'Unknown Product',
+      profiles: undefined,
+      products: undefined,
+    }));
+
+    res.json({ reviews: mapped });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PARAMETERIZED ROUTES ───
+
 // Add a review (login required)
 router.post('/:product_id', authMiddleware, async (req, res) => {
   try {
@@ -34,28 +63,6 @@ router.get('/:product_id', async (req, res) => {
       .select('*, profiles(name)')
       .eq('product_id', req.params.product_id)
       .eq('approved', true);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    const mapped = reviews.map(r => ({
-      ...r,
-      user_name: r.profiles?.name || 'Anonymous',
-      profiles: undefined,
-    }));
-
-    res.json({ reviews: mapped });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/reviews/pending — list all pending reviews (admin only)
-router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) => {
-  try {
-    const { data: reviews, error } = await supabase
-      .from('reviews')
-      .select('*, profiles(name)')
-      .eq('approved', false);
 
     if (error) return res.status(500).json({ error: error.message });
 
