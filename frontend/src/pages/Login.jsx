@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo =
+    location.state?.from ||
+    (typeof window !== 'undefined' ? sessionStorage.getItem('postLoginRedirect') : null) ||
+    '/';
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,7 +41,8 @@ export default function Login() {
       localStorage.setItem('token', data.token);
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/');
+      sessionStorage.removeItem('postLoginRedirect');
+      navigate(redirectTo, { replace: true });
     } catch {
       setError('Could not connect to server. Please try again.');
     } finally {

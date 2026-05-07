@@ -16,6 +16,7 @@ export default function OrderConfirmation() {
   const [error, setError] = useState(null);
   const [invoiceEmail, setInvoiceEmail] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
 
   useEffect(() => {
     authFetch(`http://localhost:3000/api/orders/${orderId}`)
@@ -180,6 +181,7 @@ export default function OrderConfirmation() {
                 e.preventDefault();
                 if (!invoiceEmail) return;
                 setEmailStatus('sending');
+                setPreviewUrl('');
                 try {
                   const res = await authFetch(`http://localhost:3000/api/invoices/send/${orderId}`, {
                     method: 'POST',
@@ -188,6 +190,7 @@ export default function OrderConfirmation() {
                   });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error);
+                  if (data.previewUrl) setPreviewUrl(data.previewUrl);
                   setEmailStatus('sent');
                 } catch (err) {
                   setEmailStatus('error');
@@ -209,6 +212,26 @@ export default function OrderConfirmation() {
                 </button>
                 {emailStatus === 'error' && (
                   <p className="text-red-500 text-[10px] uppercase tracking-widest mt-2">Failed to send. Try again.</p>
+                )}
+                {emailStatus === 'sent' && previewUrl && (
+                  <div className="mt-4 border border-outline-variant bg-surface-container p-4">
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-2">
+                      PDF invoice emailed (Ethereal preview)
+                    </p>
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] uppercase tracking-widest font-bold text-primary underline underline-offset-4 hover:opacity-80 break-all"
+                    >
+                      Open invoice email preview
+                    </a>
+                  </div>
+                )}
+                {emailStatus === 'sent' && !previewUrl && (
+                  <p className="text-emerald-600 text-[10px] uppercase tracking-widest mt-2">
+                    Invoice PDF sent to your email.
+                  </p>
                 )}
               </form>
             </div>

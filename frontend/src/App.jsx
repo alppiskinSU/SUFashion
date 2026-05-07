@@ -12,6 +12,7 @@ import Search from './pages/Search';
 import Favorites from './pages/Favorites';
 import Contact from './pages/Contact';
 import AdminPanel from './pages/AdminPanel';
+import RequireAuth from './components/RequireAuth';
 
 function App() {
   return (
@@ -21,7 +22,7 @@ function App() {
         <Route path="/collections" element={<Collections />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
         <Route path="/my-orders" element={<OrderTracking />} />
