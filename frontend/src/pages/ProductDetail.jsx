@@ -8,7 +8,7 @@ import { useCart } from '../contexts/CartContext';
 import { supabase } from '../lib/supabase';
 import { authFetch } from '../lib/authFetch';
 
-/* ── Stock badge component ── */
+/* ── Stock badge ── */
 function StockBadge({ quantity }) {
   if (quantity === 0) {
     return (
@@ -36,23 +36,70 @@ function StockBadge({ quantity }) {
   );
 }
 
+/* ── Star display (read-only) ── */
+function StarDisplay({ rating, size = 'sm' }) {
+  const cls = size === 'lg' ? 'w-5 h-5' : 'w-3.5 h-3.5';
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          className={`${cls} ${i <= rating ? 'fill-[#ffde59] text-[#ffde59]' : 'text-outline-variant'}`}
+          strokeWidth={1}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Star picker (interactive) ── */
+function StarPicker({ value, onChange }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onChange(i)}
+          onMouseEnter={() => setHovered(i)}
+          onMouseLeave={() => setHovered(0)}
+          className="focus:outline-none"
+        >
+          <Star
+            className={`w-6 h-6 transition-colors ${i <= (hovered || value) ? 'fill-[#ffde59] text-[#ffde59]' : 'text-outline-variant'}`}
+            strokeWidth={1}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToCart } = useCart();
+
+  /* product */
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [reviews, setReviews] = useState([]);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewHover, setReviewHover] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewMessage, setReviewMessage] = useState('');
-  const { addToCart } = useCart();
 
+  /* user */
+  const [currentUser, setCurrentUser] = useState(null);
+
+  /* reviews */
+  const [reviews, setReviews] = useState([]);
+  const [avgRating, setAvgRating] = useState(null);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState('');
+
+  /* load user from localStorage */
   useEffect(() => {
     const stored = localStorage.getItem('user');
     if (stored) {
@@ -60,12 +107,11 @@ export default function ProductDetail() {
     }
   }, []);
 
+  /* check favorites when user + product are ready */
   useEffect(() => {
     if (!currentUser?.id || !product?.id) return;
     const controller = new AbortController();
-    authFetch(`http://localhost:3000/api/favorites/check/${product.id}`, {
-      signal: controller.signal,
-    })
+    authFetch(`http://localhost:3000/api/favorites/check/${product.id}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => setIsFavorited(!!data.isFavorited))
       .catch(() => {});
@@ -73,10 +119,7 @@ export default function ProductDetail() {
   }, [currentUser?.id, product?.id]);
 
   const toggleFavorite = async () => {
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
+    if (!currentUser) { navigate('/login'); return; }
     const next = !isFavorited;
     setIsFavorited(next);
     try {
@@ -89,6 +132,7 @@ export default function ProductDetail() {
     }
   };
 
+  /* fetch product + real-time subscription */
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true);
@@ -97,7 +141,7 @@ export default function ProductDetail() {
         .select('*')
         .eq('id', id)
         .single();
-        
+
       if (!error && data) {
         setProduct({
           ...data,
@@ -108,7 +152,6 @@ export default function ProductDetail() {
         });
       } else {
         setProduct(null);
-        console.error('Supabase error:', error);
       }
       setLoading(false);
     };
@@ -117,24 +160,58 @@ export default function ProductDetail() {
 
     const channel = supabase
       .channel(`public:products:detail:${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `id=eq.${id}` }, (payload) => {
-        console.log('Real-time product change:', payload);
-        fetchProduct(); // Simple refetch on any change
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `id=eq.${id}` }, () => {
+        fetchProduct();
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [id]);
 
+  /* fetch reviews */
   useEffect(() => {
-    if (!product?.id) return;
-    fetch(`http://localhost:3000/api/reviews/${product.id}`)
-      .then(r => r.json())
-      .then(data => setReviews(data.reviews ?? []))
-      .catch(() => {});
-  }, [product?.id]);
+    if (!id) return;
+    fetchReviews();
+  }, [id]);
+
+  async function fetchReviews() {
+    try {
+      const res = await fetch(`http://localhost:3000/api/reviews/${id}`);
+      const data = await res.json();
+      setReviews(data.reviews || []);
+      setAvgRating(data.avg_rating ?? null);
+      setReviewCount(data.review_count ?? 0);
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleReviewSubmit(e) {
+    e.preventDefault();
+    if (reviewForm.rating === 0) return;
+    setSubmitting(true);
+    setSubmitMsg('');
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:3000/api/reviews/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ rating: reviewForm.rating, comment: reviewForm.comment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Submission failed');
+      setSubmitMsg(data.message);
+      setReviewForm({ rating: 0, comment: '' });
+      await fetchReviews();
+    } catch (err) {
+      setSubmitMsg(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -162,6 +239,7 @@ export default function ProductDetail() {
     );
   }
 
+<<<<<<< HEAD
   const submitReview = async (e) => {
     e.preventDefault();
     if (!reviewRating) return setReviewMessage('Please select a star rating.');
@@ -193,6 +271,8 @@ export default function ProductDetail() {
     }
   };
 
+=======
+>>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
   const isSoldOut = product.isSoldOut || product.quantity === 0;
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
@@ -210,15 +290,15 @@ export default function ProductDetail() {
           Back to Collections
         </Link>
 
+        {/* ── Product grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
-          {/* ── Image ── */}
+          {/* Image */}
           <div className="relative overflow-hidden bg-surface-container aspect-[3/4]">
             <img
               src={product.image}
               alt={product.name}
               className="w-full h-full object-cover hover:scale-105 transition-transform duration-1000"
             />
-
             {isSoldOut && (
               <div className="absolute inset-0 bg-primary/40 flex items-center justify-center backdrop-blur-[2px]">
                 <span className="bg-white text-primary px-8 py-3 text-xs uppercase tracking-widest font-bold">
@@ -226,7 +306,6 @@ export default function ProductDetail() {
                 </span>
               </div>
             )}
-
             {product.isLimited && !isSoldOut && (
               <div className="absolute top-6 left-6 bg-white px-4 py-1.5 text-[10px] uppercase tracking-widest font-bold text-primary z-10">
                 Limited Edition
@@ -234,15 +313,20 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* ── Details ── */}
+          {/* Details */}
           <div className="flex flex-col justify-center py-4 lg:py-12">
-            {/* Category */}
             <p className="text-[10px] uppercase tracking-[0.25em] text-outline font-bold mb-3">{product.category}</p>
+            <h1 className="font-serif italic text-4xl md:text-5xl text-primary mb-4 leading-tight">{product.name}</h1>
 
-            {/* Name */}
-            <h1 className="font-serif italic text-4xl md:text-5xl text-primary mb-6 leading-tight">{product.name}</h1>
+            {/* Avg rating */}
+            {avgRating && (
+              <div className="flex items-center gap-2 mb-6">
+                <StarDisplay rating={Math.round(avgRating)} size="lg" />
+                <span className="text-sm font-medium text-primary">{avgRating.toFixed(1)}</span>
+                <span className="text-xs text-outline">({reviewCount} rating{reviewCount !== 1 ? 's' : ''})</span>
+              </div>
+            )}
 
-            {/* Price */}
             <div className="flex items-baseline gap-4 mb-8">
               <span className="text-2xl font-medium text-primary">${fmt(product.price)}</span>
               {product.oldPrice && (
@@ -250,19 +334,16 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* ★ Stock Display ★ */}
             <div className="mb-8">
               <StockBadge quantity={product.quantity} />
             </div>
 
-            {/* Description */}
             <p className="text-sm text-outline font-light leading-relaxed mb-10 max-w-lg">
               {product.description}
             </p>
 
-            {/* Quantity Selector + Add to Cart */}
+            {/* Quantity + Add to Cart */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-10">
-              {/* Qty */}
               <div className="flex items-center border border-outline-variant">
                 <button
                   onClick={() => setQty(q => Math.max(1, q - 1))}
@@ -281,7 +362,6 @@ export default function ProductDetail() {
                 </button>
               </div>
 
-              {/* Add to Cart */}
               <Button
                 variant="secondary"
                 className="flex-1"
@@ -296,21 +376,17 @@ export default function ProductDetail() {
                 {isSoldOut ? 'Out of Stock' : added ? 'Added!' : 'Add to Bag'}
               </Button>
 
-              {/* Wishlist */}
               <button
                 onClick={toggleFavorite}
-                className="w-12 h-12 flex items-center justify-center border border-outline-variant hover:border-primary transition-colors"
+                className={`w-12 h-12 flex items-center justify-center border border-outline-variant transition-colors ${
+                  isFavorited ? 'text-primary border-primary' : 'text-outline hover:text-primary hover:border-primary'
+                }`}
               >
-                <Heart
-                  className="w-5 h-5 transition-colors"
-                  strokeWidth={1}
-                  fill={isFavorited ? 'currentColor' : 'none'}
-                  style={{ color: isFavorited ? '#e11d48' : undefined }}
-                />
+                <Heart className={`w-5 h-5 ${isFavorited ? 'fill-primary' : ''}`} strokeWidth={1} />
               </button>
             </div>
 
-            {/* Product Details Accordion */}
+            {/* Product Details */}
             <div className="border-t border-outline-variant pt-8 space-y-4">
               <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-4">Product Details</h3>
               <div className="grid grid-cols-2 gap-y-3 text-sm">
@@ -342,92 +418,98 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
+
         {/* ── Reviews Section ── */}
-        <section className="mt-24 border-t border-outline-variant pt-16">
-          <h2 className="font-serif italic text-3xl text-primary mb-12">
-            Reviews {reviews.length > 0 && <span className="text-outline text-xl not-italic">({reviews.length})</span>}
-          </h2>
+        <section className="border-t border-outline-variant mt-20 pt-12">
+          <div className="flex items-start justify-between mb-10">
+            <h2 className="font-serif italic text-2xl text-primary">Customer Reviews</h2>
+            {avgRating && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <StarDisplay rating={Math.round(avgRating)} size="lg" />
+                  <span className="text-xl font-medium text-primary">{avgRating.toFixed(1)}</span>
+                </div>
+                <span className="text-xs text-outline">
+                  {reviewCount} rating{reviewCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-
-            {/* ── Existing reviews ── */}
-            <div className="space-y-8">
-              {reviews.length === 0 ? (
-                <p className="text-outline text-sm uppercase tracking-widest">No reviews yet. Be the first!</p>
-              ) : reviews.map(r => (
+          {/* Approved review list */}
+          {reviews.length > 0 ? (
+            <div className="space-y-8 mb-14">
+              {reviews.map(r => (
                 <div key={r.id} className="border-b border-outline-variant pb-8">
-                  <div className="flex items-center gap-1 mb-2">
-                    {[1,2,3,4,5].map(s => (
-                      <Star key={s} className="w-4 h-4" strokeWidth={1}
-                        fill={s <= r.rating ? 'currentColor' : 'none'}
-                        style={{ color: s <= r.rating ? '#f59e0b' : undefined }}
-                      />
-                    ))}
+                  <div className="flex items-center gap-3 mb-2">
+                    <StarDisplay rating={r.rating} />
+                    <span className="text-xs font-bold text-primary">{r.user_name}</span>
+                    <span className="text-xs text-outline">
+                      {new Date(r.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
                   </div>
+<<<<<<< HEAD
                   {r.comment ? (
                     <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
                   ) : r.comment_pending ? (
                     <p className="text-sm italic text-outline leading-relaxed mb-2">Comment awaiting approval</p>
                   ) : null}
                   <p className="text-[10px] uppercase tracking-widest text-outline">{r.user_name}</p>
+=======
+                  {r.comment && <p className="text-sm text-outline font-light leading-relaxed">{r.comment}</p>}
+>>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-outline mb-14">
+              No reviews yet. Be the first to rate this product.
+            </p>
+          )}
 
-            {/* ── Submit review form ── */}
-            <div>
-              <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-8">Write a Review</h3>
-              {!currentUser ? (
-                <p className="text-sm text-outline">
-                  <a href="/login" className="underline underline-offset-4 hover:text-primary">Sign in</a> to leave a review.
-                </p>
+          {/* Submit form */}
+          <div className="max-w-lg">
+            {currentUser ? (
+              submitMsg ? (
+                <div className="bg-surface-container px-6 py-4">
+                  <p className="text-sm text-primary font-medium">{submitMsg}</p>
+                </div>
               ) : (
-                <form onSubmit={submitReview} className="space-y-6">
-                  {/* Star picker */}
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-outline mb-3">Your Rating</p>
-                    <div className="flex items-center gap-1">
-                      {[1,2,3,4,5].map(s => (
-                        <button key={s} type="button"
-                          onMouseEnter={() => setReviewHover(s)}
-                          onMouseLeave={() => setReviewHover(0)}
-                          onClick={() => setReviewRating(s)}
-                        >
-                          <Star className="w-7 h-7 transition-colors" strokeWidth={1}
-                            fill={(reviewHover || reviewRating) >= s ? 'currentColor' : 'none'}
-                            style={{ color: (reviewHover || reviewRating) >= s ? '#f59e0b' : '#9ca3af' }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <form onSubmit={handleReviewSubmit} className="space-y-5">
+                  <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Write a Review</h3>
 
-                  {/* Comment */}
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-outline mb-3">Your Comment</p>
-                    <textarea
-                      rows={4}
-                      value={reviewComment}
-                      onChange={e => setReviewComment(e.target.value)}
-                      placeholder="Share your thoughts about this product..."
-                      className="w-full bg-surface-container border border-outline-variant px-4 py-3 text-sm text-primary placeholder:text-outline outline-none focus:border-primary transition-colors resize-none"
+                    <p className="text-xs text-outline mb-2 uppercase tracking-widest">Your Rating</p>
+                    <StarPicker
+                      value={reviewForm.rating}
+                      onChange={v => setReviewForm(f => ({ ...f, rating: v }))}
                     />
                   </div>
 
-                  {reviewMessage && (
-                    <p className={`text-xs uppercase tracking-widest ${/added|submitted|approval/i.test(reviewMessage) ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {reviewMessage}
-                    </p>
-                  )}
+                  <div>
+                    <p className="text-xs text-outline mb-2 uppercase tracking-widest">Comment (optional)</p>
+                    <textarea
+                      value={reviewForm.comment}
+                      onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                      placeholder="Share your thoughts — will appear after approval"
+                      rows={4}
+                      className="w-full border border-outline-variant px-4 py-3 text-sm text-primary bg-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none transition-colors"
+                    />
+                  </div>
 
-                  <button type="submit" disabled={reviewSubmitting}
-                    className="px-8 py-3 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
-                  >
-                    {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
-                  </button>
+                  <Button type="submit" disabled={reviewForm.rating === 0 || submitting}>
+                    {submitting ? 'Submitting…' : 'Submit Review'}
+                  </Button>
                 </form>
-              )}
-            </div>
+              )
+            ) : (
+              <p className="text-sm text-outline">
+                <Link to="/login" className="font-bold text-primary underline underline-offset-4 hover:opacity-70">
+                  Log in
+                </Link>{' '}
+                to write a review.
+              </p>
+            )}
           </div>
         </section>
       </main>

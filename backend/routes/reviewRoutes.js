@@ -46,11 +46,12 @@ router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) =
 // ─── PARAMETERIZED ROUTES ───
 
 // Add a review (login required)
+// Rating is immediately active; comment awaits admin approval
 router.post('/:product_id', authMiddleware, async (req, res) => {
   try {
     const { rating, comment } = req.body;
 
-    if (rating < 1 || rating > 5)
+    if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
 
     const hasComment = comment && comment.trim().length > 0;
@@ -58,14 +59,33 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
       user_id: req.user.id,
       product_id: req.params.product_id,
       rating,
+<<<<<<< HEAD
       comment: hasComment ? comment : null,
       approved: !hasComment,
+=======
+      comment: comment || null,
+      approved: false,
+>>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
     });
 
     if (error) return res.status(500).json({ error: error.message });
 
+    // Update product popularity = avg_rating across all reviews (rating-based sort)
+    const { data: allRatings } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('product_id', req.params.product_id);
+
+    if (allRatings && allRatings.length > 0) {
+      const avg = allRatings.reduce((s, r) => s + r.rating, 0) / allRatings.length;
+      await supabase
+        .from('products')
+        .update({ popularity: Math.round(avg * 20) })
+        .eq('id', req.params.product_id);
+    }
+
     res.status(201).json({
-      message: 'Rating added immediately. Your comment is awaiting approval.',
+      message: 'Your rating is live. Your comment will appear after approval.',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -73,10 +93,11 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 });
 
 // Get reviews for a product
-// Ratings are visible immediately; comment text is hidden until approved.
+// avg_rating is computed from ALL ratings (immediately active)
+// comment text is only returned for approved reviews
 router.get('/:product_id', async (req, res) => {
   try {
-    const { data: reviews, error } = await supabase
+    const { data: allReviews, error } = await supabase
       .from('reviews')
       .select('*')
       .eq('product_id', req.params.product_id)
@@ -84,9 +105,7 @@ router.get('/:product_id', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Fetch the matching profile names in a separate query (no FK between
-    // reviews.user_id and profiles.id is defined in this schema).
-    const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+    const userIds = [...new Set((allReviews || []).map(r => r.user_id).filter(Boolean))];
     let nameById = {};
     if (userIds.length) {
       const { data: profiles } = await supabase
@@ -96,14 +115,28 @@ router.get('/:product_id', async (req, res) => {
       nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
     }
 
-    const mapped = (reviews || []).map(r => ({
-      ...r,
-      user_name: nameById[r.user_id] || 'Anonymous',
-      comment: r.approved ? r.comment : null,
-      comment_pending: !r.approved,
-    }));
+    // avg_rating from ALL submitted ratings (not just approved)
+    const avg_rating =
+      allReviews.length > 0
+        ? Math.round((allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length) * 10) / 10
+        : null;
 
-    res.json({ reviews: mapped });
+    // Only expose reviews whose comments have been approved
+    const approvedReviews = allReviews
+      .filter(r => r.approved)
+      .map(r => ({
+        id: r.id,
+        rating: r.rating,
+        comment: r.comment,
+        created_at: r.created_at,
+        user_name: nameById[r.user_id] || 'Anonymous',
+      }));
+
+    res.json({
+      avg_rating,
+      review_count: allReviews.length,
+      reviews: approvedReviews,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

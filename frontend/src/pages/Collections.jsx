@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -9,80 +9,60 @@ import { supabase } from '../lib/supabase';
 
 export default function Collections() {
   const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [sort, setSort] = useState('');
   const [categories, setCategories] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [sortMode, setSortMode] = useState('default');
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const { data, error } = await supabase.from('products').select('*');
-      if (!error && data) {
-        const mappedData = data.map(mapProductData);
-        setProducts(mappedData);
+  const categoryParam = searchParams.get('category') || '';
 
-        const catSet = new Set();
-        data.forEach((p) => {
-          if (p.category) catSet.add(p.category);
-        });
-        const cats = Array.from(catSet).map((c) => ({ id: c.toLowerCase(), label: c }));
-        setCategories(cats);
+  async function fetchProducts(sort, category) {
+    const params = new URLSearchParams();
+    if (sort && sort !== 'default') params.set('sort', sort);
+    if (category) params.set('category', category);
 
-        const categoryParam = searchParams.get('category');
-        if (categoryParam) {
-          setFilteredProducts(
-            mappedData.filter(
-              (p) => p.category && p.category.toLowerCase() === categoryParam.toLowerCase()
-            )
-          );
-        } else {
-          setFilteredProducts(mappedData);
-        }
-      } else {
-        console.error('Supabase error:', error);
+    try {
+      const res = await fetch(`http://localhost:3000/api/products?${params}`);
+      const data = await res.json();
+      const mapped = (data.products || []).map(p => ({
+        ...p,
+        image: p.image_url,
+        hoverImage: p.image_url,
+        isSoldOut: p.quantity === 0,
+        isLimited: p.is_limited,
+        oldPrice: p.old_price,
+      }));
+      setProducts(mapped);
+
+      if (!category) {
+        const catSet = new Set(mapped.map(p => p.category).filter(Boolean));
+        setCategories(Array.from(catSet).map(c => ({ id: c.toLowerCase(), label: c })));
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+    }
+  }
 
-    fetchProducts();
+  // Refetch whenever sort or category changes
+  useEffect(() => {
+    fetchProducts(sortMode, categoryParam);
+  }, [sortMode, categoryParam]);
 
+  // Real-time: refetch via backend on product table changes
+  useEffect(() => {
     const channel = supabase
       .channel('public:products:collections')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-        fetchProducts();
+        fetchProducts(sortMode, categoryParam);
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const mapProductData = (p) => ({
-    ...p,
-    image: p.image_url,
-    hoverImage: p.image_url,
-    isSoldOut: p.quantity === 0,
-    isLimited: p.is_limited,
-    oldPrice: p.old_price,
-  });
-
-  const getSorted = (items) => {
-    const copy = [...items];
-    if (sort === 'price_asc')  return copy.sort((a, b) => a.price - b.price);
-    if (sort === 'price_desc') return copy.sort((a, b) => b.price - a.price);
-    if (sort === 'popularity') return copy.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-    return copy;
-  };
+    return () => { supabase.removeChannel(channel); };
+  }, [sortMode, categoryParam]);
 
   const handleFilterChange = (categoryId) => {
     if (categoryId === 'all') {
       setSearchParams({});
-      setFilteredProducts(products);
     } else {
       setSearchParams({ category: categoryId });
-      setFilteredProducts(
-        products.filter((p) => p.category && p.category.toLowerCase() === categoryId.toLowerCase())
-      );
     }
   };
 
@@ -100,10 +80,11 @@ export default function Collections() {
         <CollectionFilter
           categories={categories}
           onFilterChange={handleFilterChange}
-          onSortChange={setSort}
+          sortMode={sortMode}
+          onSortChange={setSortMode}
         />
 
-        <CollectionGrid products={getSorted(filteredProducts)} />
+        <CollectionGrid products={products} />
       </main>
 
       <Footer />
