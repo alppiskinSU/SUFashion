@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
       query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
     }
     if (category) {
-      query = query.eq('category', category);
+      query = query.ilike('category', category);
     }
     if (sort === 'price_asc')  query = query.order('price', { ascending: true });
     if (sort === 'price_desc') query = query.order('price', { ascending: false });
