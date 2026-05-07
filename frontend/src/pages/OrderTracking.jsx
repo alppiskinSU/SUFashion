@@ -23,8 +23,18 @@ const stepIcons = {
 
 const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+/** DB stores `shipped`; UI timeline uses `in-transit` (demo wording). */
+function normalizeOrderStatus(raw) {
+  const s = raw || 'processing';
+  if (s === 'shipped') return 'in-transit';
+  return s;
+}
+
 function StatusTimeline({ currentStatus }) {
-  const currentIdx = STATUS_STEPS.indexOf(currentStatus);
+  const uiStatus = normalizeOrderStatus(currentStatus);
+  const currentIdx = STATUS_STEPS.includes(uiStatus)
+    ? STATUS_STEPS.indexOf(uiStatus)
+    : 0;
   return (
     <div className="flex items-center gap-0 mt-6">
       {STATUS_STEPS.map((step, idx) => {
@@ -51,9 +61,30 @@ function StatusTimeline({ currentStatus }) {
   );
 }
 
-function OrderCard({ order }) {
+function OrderCard({ order, onRefresh }) {
   const [expanded, setExpanded] = useState(false);
-  const cfg = statusConfig[order.status] ?? statusConfig.processing;
+  const [updating, setUpdating] = useState(false);
+  const uiStatus = normalizeOrderStatus(order.status);
+  const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
+  const raw = order.status || 'processing';
+
+  const patchStatus = async (nextStatus) => {
+    setUpdating(true);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+      await onRefresh?.();
+    } catch (e) {
+      alert(e.message || 'Could not update status');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <div className="bg-surface-container-low">
@@ -126,6 +157,32 @@ function OrderCard({ order }) {
             <StatusTimeline currentStatus={order.status} />
           )}
 
+          {/* Demo: advance delivery status (backend PATCH) */}
+          {order.status !== 'cancelled' && (
+            <div className="mt-8 flex flex-wrap gap-3">
+              {raw === 'processing' && (
+                <button
+                  type="button"
+                  disabled={updating}
+                  onClick={e => { e.stopPropagation(); patchStatus('in-transit'); }}
+                  className="px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold bg-primary text-white hover:brightness-95 disabled:opacity-50"
+                >
+                  {updating ? 'Updating…' : 'Ship order (In transit)'}
+                </button>
+              )}
+              {raw === 'shipped' && (
+                <button
+                  type="button"
+                  disabled={updating}
+                  onClick={e => { e.stopPropagation(); patchStatus('delivered'); }}
+                  className="px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold bg-secondary-container text-on-secondary-container hover:brightness-95 disabled:opacity-50"
+                >
+                  {updating ? 'Updating…' : 'Mark as delivered'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Items */}
           <div className="mt-10 space-y-6">
             <p className="text-[10px] uppercase tracking-widest text-outline">Items</p>
@@ -173,12 +230,15 @@ export default function OrderTracking() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refreshOrders = () =>
     authFetch('http://localhost:3000/api/orders/user/me')
       .then(r => r.json())
       .then(data => setOrders(data.orders ?? []))
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
+      .catch(() => setOrders([]));
+
+  useEffect(() => {
+    setLoading(true);
+    refreshOrders().finally(() => setLoading(false));
   }, []);
 
   if (loading) return (
@@ -232,7 +292,7 @@ export default function OrderTracking() {
         ) : (
           <div className="space-y-4">
             {orders.map(order => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} onRefresh={refreshOrders} />
             ))}
           </div>
         )}
