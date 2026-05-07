@@ -23,12 +23,6 @@ const stepIcons = {
 
 const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
-<<<<<<< HEAD
-const normalizeStatus = (s) => s === 'shipped' ? 'in-transit' : s;
-
-function StatusTimeline({ currentStatus }) {
-  const currentIdx = STATUS_STEPS.indexOf(normalizeStatus(currentStatus));
-=======
 /** DB stores `shipped`; UI timeline uses `in-transit` (demo wording). */
 function normalizeOrderStatus(raw) {
   const s = raw || 'processing';
@@ -41,7 +35,6 @@ function StatusTimeline({ currentStatus }) {
   const currentIdx = STATUS_STEPS.includes(uiStatus)
     ? STATUS_STEPS.indexOf(uiStatus)
     : 0;
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
   return (
     <div className="flex items-center gap-0 mt-6">
       {STATUS_STEPS.map((step, idx) => {
@@ -70,9 +63,6 @@ function StatusTimeline({ currentStatus }) {
 
 function OrderCard({ order, onRefresh }) {
   const [expanded, setExpanded] = useState(false);
-<<<<<<< HEAD
-  const cfg = statusConfig[normalizeStatus(order.status)] ?? statusConfig.processing;
-=======
   const [updating, setUpdating] = useState(false);
   const uiStatus = normalizeOrderStatus(order.status);
   const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
@@ -95,7 +85,6 @@ function OrderCard({ order, onRefresh }) {
       setUpdating(false);
     }
   };
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
 
   return (
     <div className="bg-surface-container-low">

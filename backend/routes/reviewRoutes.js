@@ -45,8 +45,33 @@ router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) =
 
 // ─── PARAMETERIZED ROUTES ───
 
-// Add a review (login required)
-// Rating is immediately active; comment awaits admin approval
+// Helper: has the current user actually purchased this product? Cancelled
+// orders don't count as a purchase.
+async function userHasPurchased(userId, productId) {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, status')
+    .eq('user_id', userId)
+    .eq('product_id', productId)
+    .neq('status', 'cancelled')
+    .limit(1);
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
+}
+
+// GET /api/reviews/can-review/:product_id — frontend uses this to decide
+// whether to show the review form. Returns { canReview: boolean }.
+router.get('/can-review/:product_id', authMiddleware, async (req, res) => {
+  try {
+    const canReview = await userHasPurchased(req.user.id, req.params.product_id);
+    res.json({ canReview });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a review (login + purchase required)
+// Rating is immediately active; a comment (when supplied) awaits moderation.
 router.post('/:product_id', authMiddleware, async (req, res) => {
   try {
     const { rating, comment } = req.body;
@@ -54,18 +79,25 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
 
-    const hasComment = comment && comment.trim().length > 0;
+    // Reviews are reserved for actual buyers — server-side guard so it can't
+    // be bypassed even if the UI is tampered with.
+    const purchased = await userHasPurchased(req.user.id, req.params.product_id);
+    if (!purchased) {
+      return res.status(403).json({
+        error: 'You can only review products you have purchased.',
+      });
+    }
+
+    const hasComment = !!(comment && comment.trim().length > 0);
+
     const { error } = await supabase.from('reviews').insert({
       user_id: req.user.id,
       product_id: req.params.product_id,
       rating,
-<<<<<<< HEAD
       comment: hasComment ? comment : null,
+      // Rating-only submissions count as approved (so the rating shows up
+      // immediately). Submissions with a comment must still be moderated.
       approved: !hasComment,
-=======
-      comment: comment || null,
-      approved: false,
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
     });
 
     if (error) return res.status(500).json({ error: error.message });
