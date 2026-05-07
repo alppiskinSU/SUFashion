@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Lock, Truck, ShieldCheck } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
@@ -6,6 +6,7 @@ import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useCart } from '../contexts/CartContext';
+import { placeOrder } from '../lib/placeOrder';
 
 
 /* ── Helpers ── */
@@ -27,6 +28,8 @@ export default function Checkout() {
     firstName: '', lastName: '', email: '', address: '', city: '', zip: '', country: '',
     cardName: '', cardNumber: '', expiry: '', cvv: '',
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const subtotal = cartTotal;
   const shipping = 0; // free shipping
@@ -44,32 +47,30 @@ export default function Checkout() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (submitting) return;
+
+    if (!localStorage.getItem('token')) {
+      sessionStorage.setItem('postLoginRedirect', '/checkout');
+      navigate('/login', { state: { from: '/checkout' } });
       return;
     }
 
+    setSubmitting(true);
+    setErrorMsg('');
     try {
-      let lastOrderId = null;
-      for (const item of cartItems) {
-        const res = await fetch('http://localhost:3000/api/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ product_id: item.product_id ?? item.id, quantity: item.quantity }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Order failed');
-        if (data.order_id) lastOrderId = data.order_id;
-      }
+      const { orderId } = await placeOrder(cartItems);
       clearCart();
-      navigate(lastOrderId ? `/order-confirmation/${lastOrderId}` : '/my-orders');
+      navigate(orderId ? `/order-confirmation/${orderId}` : '/my-orders');
     } catch (err) {
-      alert(err.message);
+      if (err.code === 'UNAUTHENTICATED') {
+        sessionStorage.setItem('postLoginRedirect', '/checkout');
+        navigate('/login', { state: { from: '/checkout' } });
+        return;
+      }
+      setErrorMsg(err.message || 'Could not place your order. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -149,10 +150,19 @@ export default function Checkout() {
             </section>
 
             {/* Submit — visible on mobile below form */}
-            <div className="lg:hidden pt-4">
-              <Button variant="secondary" className="w-full" type="submit">
-                Place Order — ${fmt(total)}
+            <div className="lg:hidden pt-4 space-y-3">
+              <Button
+                variant="secondary"
+                className="w-full"
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || cartItems.length === 0}
+              >
+                {submitting ? 'Processing…' : `Place Order — $${fmt(total)}`}
               </Button>
+              {errorMsg && (
+                <p className="text-red-500 text-[10px] uppercase tracking-widest">{errorMsg}</p>
+              )}
             </div>
           </div>
 
@@ -210,10 +220,19 @@ export default function Checkout() {
               </div>
 
               {/* Place order — desktop */}
-              <div className="hidden lg:block mt-10">
-                <Button variant="secondary" className="w-full" type="submit">
-                  Place Order
+              <div className="hidden lg:block mt-10 space-y-3">
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || cartItems.length === 0}
+                >
+                  {submitting ? 'Processing…' : 'Place Order'}
                 </Button>
+                {errorMsg && (
+                  <p className="text-red-500 text-[10px] uppercase tracking-widest">{errorMsg}</p>
+                )}
               </div>
             </div>
           </aside>

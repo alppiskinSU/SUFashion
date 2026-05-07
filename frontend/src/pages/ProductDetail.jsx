@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShoppingBag, Heart, Minus, Plus, Package, AlertTriangle, Star } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import { useCart } from '../contexts/CartContext';
 import { supabase } from '../lib/supabase';
+import { authFetch } from '../lib/authFetch';
 
 /* ── Stock badge ── */
 function StockBadge({ quantity }) {
@@ -77,24 +78,61 @@ function StarPicker({ value, onChange }) {
 
 export default function ProductDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { addToCart } = useCart();
 
-  /* product state */
+  /* product */
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
-  const { addToCart } = useCart();
+  const [isFavorited, setIsFavorited] = useState(false);
 
-  /* review state */
+  /* user */
+  const [currentUser, setCurrentUser] = useState(null);
+
+  /* reviews */
   const [reviews, setReviews] = useState([]);
   const [avgRating, setAvgRating] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
-  const [currentUser, setCurrentUser] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
 
-  /* fetch product + subscribe to real-time changes */
+  /* load user from localStorage */
+  useEffect(() => {
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      try { setCurrentUser(JSON.parse(stored)); } catch { setCurrentUser(null); }
+    }
+  }, []);
+
+  /* check favorites when user + product are ready */
+  useEffect(() => {
+    if (!currentUser?.id || !product?.id) return;
+    const controller = new AbortController();
+    authFetch(`http://localhost:3000/api/favorites/check/${product.id}`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(data => setIsFavorited(!!data.isFavorited))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [currentUser?.id, product?.id]);
+
+  const toggleFavorite = async () => {
+    if (!currentUser) { navigate('/login'); return; }
+    const next = !isFavorited;
+    setIsFavorited(next);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/favorites/${product.id}`, {
+        method: isFavorited ? 'DELETE' : 'POST',
+      });
+      if (!res.ok) setIsFavorited(!next);
+    } catch {
+      setIsFavorited(!next);
+    }
+  };
+
+  /* fetch product + real-time subscription */
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true);
@@ -130,14 +168,9 @@ export default function ProductDetail() {
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
-  /* fetch reviews + auth session */
+  /* fetch reviews */
   useEffect(() => {
     if (!id) return;
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUser(session?.user ?? null);
-    });
-
     fetchReviews();
   }, [id]);
 
@@ -251,7 +284,7 @@ export default function ProductDetail() {
             <p className="text-[10px] uppercase tracking-[0.25em] text-outline font-bold mb-3">{product.category}</p>
             <h1 className="font-serif italic text-4xl md:text-5xl text-primary mb-4 leading-tight">{product.name}</h1>
 
-            {/* Inline avg rating */}
+            {/* Avg rating */}
             {avgRating && (
               <div className="flex items-center gap-2 mb-6">
                 <StarDisplay rating={Math.round(avgRating)} size="lg" />
@@ -309,8 +342,13 @@ export default function ProductDetail() {
                 {isSoldOut ? 'Out of Stock' : added ? 'Added!' : 'Add to Bag'}
               </Button>
 
-              <button className="w-12 h-12 flex items-center justify-center border border-outline-variant text-outline hover:text-primary hover:border-primary">
-                <Heart className="w-5 h-5" strokeWidth={1} />
+              <button
+                onClick={toggleFavorite}
+                className={`w-12 h-12 flex items-center justify-center border border-outline-variant transition-colors ${
+                  isFavorited ? 'text-primary border-primary' : 'text-outline hover:text-primary hover:border-primary'
+                }`}
+              >
+                <Heart className={`w-5 h-5 ${isFavorited ? 'fill-primary' : ''}`} strokeWidth={1} />
               </button>
             </div>
 

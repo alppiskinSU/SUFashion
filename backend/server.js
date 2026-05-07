@@ -11,9 +11,10 @@ app.use('/api/auth',     require('./routes/authRoutes'));
 app.use('/api/cart',     require('./routes/cartRoutes'));
 app.use('/api/reviews',  require('./routes/reviewRoutes'));
 app.use('/api/orders',   require('./routes/orderRoutes'));
-app.use('/api/invoice',  require('./routes/invoiceRoutes'));
+app.use('/api/invoices',   require('./routes/invoiceRoutes'));
+app.use('/api/favorites', require('./routes/favoriteRoutes'));
 
-app.get('/', (req, res) => res.json({ message: 'SUFashion API çalışıyor' }));
+app.get('/', (_req, res) => res.json({ message: 'SUFashion API çalışıyor' }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda çalışıyor`));

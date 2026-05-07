@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
+const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
 
 // Get all products - supports search, sort and category filter
 router.get('/', async (req, res) => {
@@ -56,6 +57,45 @@ router.get('/:id', async (req, res) => {
       isLimited: product.is_limited,
       oldPrice: product.old_price,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/products — admin only
+router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info } = req.body;
+
+    if (!name || !price) {
+      return res.status(400).json({ error: 'name and price are required' });
+    }
+
+    const { data: product, error } = await supabase
+      .from('products')
+      .insert([{ name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info }])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.status(201).json({ product });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/products/:id — admin only
+router.delete('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ message: 'Product deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

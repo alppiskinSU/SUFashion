@@ -2,6 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db'); 
 const { authMiddleware } = require('../middleware/authMiddleware'); 
+
+/* ── Status constants ──
+ * DB CHECK constraint accepts: processing, shipped, delivered, cancelled
+ * Frontend uses "in-transit" as a label → alias mapped to "shipped"
+ */
+const VALID_STATUSES = ['processing', 'shipped', 'delivered', 'cancelled'];
+const STATUS_ALIASES = { 'in-transit': 'shipped' };
+const ALLOWED_TRANSITIONS = {
+  'processing': ['shipped', 'cancelled'],
+  'shipped':    ['delivered', 'cancelled'],
+  'delivered':  [],          // terminal state
+  'cancelled':  [],          // terminal state
+};
+
 // Create an order and reduce stock
 router.post('/', authMiddleware, async (req, res) => {
   const { product_id, quantity } = req.body;
@@ -90,6 +104,69 @@ router.get('/user/me', authMiddleware, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
 
     res.json({ orders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── NEW: Update order status ──
+// PATCH /api/orders/:id/status
+// Body: { "status": "shipped" } or { "status": "in-transit" } (alias)
+router.patch('/:id/status', authMiddleware, async (req, res) => {
+  let { status } = req.body;
+  const orderId = req.params.id;
+
+  // Normalise frontend alias → DB value
+  if (STATUS_ALIASES[status]) {
+    status = STATUS_ALIASES[status];
+  }
+
+  // 1. Validate incoming status value
+  if (!status || !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({
+      error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')} (or alias: ${Object.keys(STATUS_ALIASES).join(', ')})`
+    });
+  }
+
+  try {
+    // 2. Fetch the current order to check ownership & current status
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('id, status, user_id')
+      .eq('id', orderId)
+      .eq('user_id', req.user.id)
+      .single();
+
+    if (fetchError || !order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // 3. Validate the transition
+    const currentStatus = order.status || 'processing';
+    const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition from "${currentStatus}" to "${status}". Allowed: ${allowed.length ? allowed.join(', ') : 'none (terminal state)'}`
+      });
+    }
+
+    // 4. Perform the update
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId)
+      .eq('user_id', req.user.id)
+      .select('id, status, user_id, product_id, quantity, total_price, created_at')
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({
+      message: `Order status updated: ${currentStatus} → ${status}`,
+      order: updatedOrder
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

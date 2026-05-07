@@ -11,8 +11,13 @@ export default function QuickLookDrawer({ isOpen, onClose }) {
 
   const handleCheckout = () => {
     onClose();
-    const user = localStorage.getItem('user');
-    navigate(user ? '/checkout' : '/login');
+    const isLoggedIn = !!localStorage.getItem('token');
+    if (!isLoggedIn) {
+      sessionStorage.setItem('postLoginRedirect', '/checkout');
+      navigate('/login', { state: { from: '/checkout' } });
+    } else {
+      navigate('/checkout');
+    }
   };
 
   return (

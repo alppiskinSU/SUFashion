@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, User, LogOut, Package } from 'lucide-react';
+import { Search, Heart, ShoppingBag, User, LogOut, Package, Shield } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import QuickLookDrawer from './QuickLookDrawer';
 
@@ -38,6 +38,7 @@ export default function Navbar() {
             <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
             <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
             <Link to="/about" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/about' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>About</Link>
+            <Link to="/contact" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/contact' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Contact</Link>
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">
@@ -47,7 +48,10 @@ export default function Navbar() {
           >
             <Search className="w-[22px] h-[22px]" strokeWidth={1} />
           </button>
-          <button className="hover:opacity-80 transition-opacity relative flex items-center justify-center">
+          <button
+            onClick={() => navigate('/favorites')}
+            className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
+          >
             <Heart className="w-[22px] h-[22px]" strokeWidth={1} />
           </button>
           <button 
@@ -73,6 +77,12 @@ export default function Navbar() {
                     <p className="text-[10px] uppercase tracking-widest text-outline">Signed in as</p>
                     <p className="text-[11px] font-bold text-primary truncate mt-0.5">{user.name || user.email}</p>
                   </div>
+                  {user.role === 'admin' && (
+                    <Link to="/admin" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                      <Shield className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      Admin Panel
+                    </Link>
+                  )}
                   <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
                     <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
                     My Orders

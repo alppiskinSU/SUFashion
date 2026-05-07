@@ -1,7 +1,45 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
+
+// ─── STATIC ROUTES FIRST (before :param routes) ───
+
+// GET /api/reviews/pending — list all pending reviews (admin only)
+router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) => {
+  try {
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('*, products(name)')
+      .eq('approved', false)
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+    let nameById = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
+    }
+
+    const mapped = (reviews || []).map(r => ({
+      ...r,
+      user_name: nameById[r.user_id] || 'Anonymous',
+      product_name: r.products?.name || 'Unknown Product',
+      products: undefined,
+    }));
+
+    res.json({ reviews: mapped });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PARAMETERIZED ROUTES ───
 
 // Add a review (login required)
 // Rating is immediately active; comment awaits admin approval
@@ -38,11 +76,22 @@ router.get('/:product_id', async (req, res) => {
     // Service role bypasses RLS — reads all reviews regardless of approved status
     const { data: allReviews, error } = await supabase
       .from('reviews')
-      .select('*, profiles(name)')
+      .select('*')
       .eq('product_id', req.params.product_id)
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Fetch profile names separately (avoids FK dependency issues)
+    const userIds = [...new Set((allReviews || []).map(r => r.user_id).filter(Boolean))];
+    let nameById = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
+    }
 
     // avg_rating from ALL submitted ratings (not just approved)
     const avg_rating =
@@ -58,7 +107,7 @@ router.get('/:product_id', async (req, res) => {
         rating: r.rating,
         comment: r.comment,
         created_at: r.created_at,
-        user_name: r.profiles?.name || 'Anonymous',
+        user_name: nameById[r.user_id] || 'Anonymous',
       }));
 
     res.json({
@@ -66,6 +115,38 @@ router.get('/:product_id', async (req, res) => {
       review_count: allReviews.length,
       reviews: approvedReviews,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/reviews/:id/approve — admin only
+router.patch('/:id/approve', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('reviews')
+      .update({ approved: true })
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ message: 'Review approved' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/reviews/:id/reject — deletes the review (admin only)
+router.patch('/:id/reject', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ message: 'Review rejected and removed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
