@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 
 const CartContext = createContext();
 
@@ -8,8 +15,80 @@ export function useCart() {
   return ctx;
 }
 
+/**
+ * Resolve the active cart storage key based on the currently logged in user.
+ * Logged-in users get their own bucket so each account keeps its own cart and
+ * a fresh login on a shared device never inherits the previous account's bag.
+ * Logged-out (guest) carts live in memory only — they are wiped on sign-out.
+ */
+function getActiveCartKey() {
+  try {
+    const stored = localStorage.getItem('user');
+    if (!stored) return null;
+    const user = JSON.parse(stored);
+    return user?.id ? `cart:${user.id}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function readCart(key) {
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function CartProvider({ children }) {
-  const [items, setItems] = useState([]);
+  const [cartKey, setCartKey] = useState(() => getActiveCartKey());
+  const [items, setItems] = useState(() => readCart(getActiveCartKey()));
+  const skipNextPersist = useRef(false);
+
+  // Keep the in-memory cart in sync with the active storage bucket. When the
+  // user changes (login / logout / swap account) we re-load that bucket and
+  // suppress the next persist so we don't accidentally overwrite it.
+  useEffect(() => {
+    const syncFromActiveUser = () => {
+      const nextKey = getActiveCartKey();
+      setCartKey(prevKey => {
+        if (prevKey === nextKey) return prevKey;
+        skipNextPersist.current = true;
+        setItems(readCart(nextKey));
+        return nextKey;
+      });
+    };
+
+    const handleStorage = (e) => {
+      if (!e || e.key === 'user' || e.key === null) syncFromActiveUser();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('auth-changed', syncFromActiveUser);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('auth-changed', syncFromActiveUser);
+    };
+  }, []);
+
+  // Persist cart for logged-in users. Guests (cartKey === null) keep an
+  // in-memory cart only, which is wiped automatically when they sign out.
+  useEffect(() => {
+    if (skipNextPersist.current) {
+      skipNextPersist.current = false;
+      return;
+    }
+    if (!cartKey) return;
+    try {
+      localStorage.setItem(cartKey, JSON.stringify(items));
+    } catch {
+      /* storage might be full or disabled — ignore */
+    }
+  }, [items, cartKey]);
 
   const addToCart = useCallback((product, qty = 1) => {
     setItems(prev => {

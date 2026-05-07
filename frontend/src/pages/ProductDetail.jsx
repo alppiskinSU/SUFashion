@@ -98,6 +98,7 @@ export default function ProductDetail() {
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
+  const [canReview, setCanReview] = useState(false);
 
   /* load user from localStorage */
   useEffect(() => {
@@ -185,6 +186,21 @@ export default function ProductDetail() {
       // silently fail
     }
   }
+
+  // Only buyers may submit a review — ask the backend whether the current
+  // user has actually purchased this product.
+  useEffect(() => {
+    if (!currentUser?.id || !product?.id) {
+      setCanReview(false);
+      return;
+    }
+    let cancelled = false;
+    authFetch(`http://localhost:3000/api/reviews/can-review/${product.id}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setCanReview(!!d.canReview); })
+      .catch(() => { if (!cancelled) setCanReview(false); });
+    return () => { cancelled = true; };
+  }, [currentUser?.id, product?.id]);
 
   async function handleReviewSubmit(e) {
     e.preventDefault();
@@ -432,46 +448,48 @@ export default function ProductDetail() {
 
           {/* Submit form */}
           <div className="max-w-lg">
-            {currentUser ? (
-              submitMsg ? (
-                <div className="bg-surface-container px-6 py-4">
-                  <p className="text-sm text-primary font-medium">{submitMsg}</p>
-                </div>
-              ) : (
-                <form onSubmit={handleReviewSubmit} className="space-y-5">
-                  <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Write a Review</h3>
-
-                  <div>
-                    <p className="text-xs text-outline mb-2 uppercase tracking-widest">Your Rating</p>
-                    <StarPicker
-                      value={reviewForm.rating}
-                      onChange={v => setReviewForm(f => ({ ...f, rating: v }))}
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-outline mb-2 uppercase tracking-widest">Comment (optional)</p>
-                    <textarea
-                      value={reviewForm.comment}
-                      onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
-                      placeholder="Share your thoughts — will appear after approval"
-                      rows={4}
-                      className="w-full border border-outline-variant px-4 py-3 text-sm text-primary bg-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none transition-colors"
-                    />
-                  </div>
-
-                  <Button type="submit" disabled={reviewForm.rating === 0 || submitting}>
-                    {submitting ? 'Submitting…' : 'Submit Review'}
-                  </Button>
-                </form>
-              )
-            ) : (
+            {!currentUser ? (
               <p className="text-sm text-outline">
                 <Link to="/login" className="font-bold text-primary underline underline-offset-4 hover:opacity-70">
                   Log in
                 </Link>{' '}
                 to write a review.
               </p>
+            ) : !canReview ? (
+              <p className="text-sm text-outline">
+                You can only review products you have purchased.
+              </p>
+            ) : submitMsg ? (
+              <div className="bg-surface-container px-6 py-4">
+                <p className="text-sm text-primary font-medium">{submitMsg}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleReviewSubmit} className="space-y-5">
+                <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Write a Review</h3>
+
+                <div>
+                  <p className="text-xs text-outline mb-2 uppercase tracking-widest">Your Rating</p>
+                  <StarPicker
+                    value={reviewForm.rating}
+                    onChange={v => setReviewForm(f => ({ ...f, rating: v }))}
+                  />
+                </div>
+
+                <div>
+                  <p className="text-xs text-outline mb-2 uppercase tracking-widest">Comment (optional)</p>
+                  <textarea
+                    value={reviewForm.comment}
+                    onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                    placeholder="Share your thoughts — will appear after approval"
+                    rows={4}
+                    className="w-full border border-outline-variant px-4 py-3 text-sm text-primary bg-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none transition-colors"
+                  />
+                </div>
+
+                <Button type="submit" disabled={reviewForm.rating === 0 || submitting}>
+                  {submitting ? 'Submitting…' : 'Submit Review'}
+                </Button>
+              </form>
             )}
           </div>
         </section>

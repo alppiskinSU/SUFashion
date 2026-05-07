@@ -46,6 +46,39 @@ export default function Checkout() {
     setForm(p => ({ ...p, [id]: value }));
   }
 
+  function validatePaymentDetails() {
+    const required = [
+      ['firstName',  'First name'],
+      ['lastName',   'Last name'],
+      ['email',      'Email'],
+      ['address',    'Address'],
+      ['city',       'City'],
+      ['zip',        'ZIP / Postal code'],
+      ['country',    'Country'],
+      ['cardName',   'Name on card'],
+      ['cardNumber', 'Card number'],
+      ['expiry',     'Expiry date'],
+      ['cvv',        'CVV'],
+    ];
+    for (const [key, label] of required) {
+      if (!String(form[key] ?? '').trim()) return `${label} is required.`;
+    }
+
+    const cardDigits = form.cardNumber.replace(/\D/g, '');
+    if (cardDigits.length !== 16) return 'Card number must be 16 digits.';
+
+    const expiryMatch = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(form.expiry);
+    if (!expiryMatch) return 'Expiry must be in MM/YY format.';
+    const expMonth = parseInt(expiryMatch[1], 10);
+    const expYear  = 2000 + parseInt(expiryMatch[2], 10);
+    const now = new Date();
+    const lastValid = new Date(expYear, expMonth, 0, 23, 59, 59);
+    if (lastValid < now) return 'Card has expired.';
+
+    if (!/^\d{3}$/.test(form.cvv)) return 'CVV must be 3 digits.';
+    return null;
+  }
+
   async function handleSubmit(e) {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
     if (submitting) return;
@@ -53,6 +86,12 @@ export default function Checkout() {
     if (!localStorage.getItem('token')) {
       sessionStorage.setItem('postLoginRedirect', '/checkout');
       navigate('/login', { state: { from: '/checkout' } });
+      return;
+    }
+
+    const validationError = validatePaymentDetails();
+    if (validationError) {
+      setErrorMsg(validationError);
       return;
     }
 
@@ -110,13 +149,13 @@ export default function Checkout() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
-                <Input label="First Name"  id="firstName" value={form.firstName} onChange={handleChange} />
-                <Input label="Last Name"   id="lastName"  value={form.lastName}  onChange={handleChange} />
-                <Input label="Email"        id="email"     type="email" className="sm:col-span-2" value={form.email} onChange={handleChange} />
-                <Input label="Address"      id="address"   className="sm:col-span-2" value={form.address} onChange={handleChange} />
-                <Input label="City"         id="city"      value={form.city} onChange={handleChange} />
-                <Input label="ZIP / Postal" id="zip"       value={form.zip}  onChange={handleChange} />
-                <Input label="Country"      id="country"   className="sm:col-span-2" value={form.country} onChange={handleChange} />
+                <Input label="First Name"  id="firstName" value={form.firstName} onChange={handleChange} required />
+                <Input label="Last Name"   id="lastName"  value={form.lastName}  onChange={handleChange} required />
+                <Input label="Email"        id="email"     type="email" className="sm:col-span-2" value={form.email} onChange={handleChange} required />
+                <Input label="Address"      id="address"   className="sm:col-span-2" value={form.address} onChange={handleChange} required />
+                <Input label="City"         id="city"      value={form.city} onChange={handleChange} required />
+                <Input label="ZIP / Postal" id="zip"       value={form.zip}  onChange={handleChange} required />
+                <Input label="Country"      id="country"   className="sm:col-span-2" value={form.country} onChange={handleChange} required />
               </div>
             </section>
 
@@ -131,16 +170,33 @@ export default function Checkout() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
-                <Input label="Name on Card" id="cardName"   className="sm:col-span-2" value={form.cardName}   onChange={handleChange} />
+                <Input label="Name on Card" id="cardName"   className="sm:col-span-2" value={form.cardName}   onChange={handleChange} required autoComplete="cc-name" />
                 <Input label="Card Number"  id="cardNumber" className="sm:col-span-2" value={form.cardNumber} onChange={handleChange}
+                  required
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  pattern="(\d{4} ?){4}"
+                  title="Enter a 16-digit card number"
                   indicator={
                     <span className="absolute right-0 top-2 text-outline flex items-center gap-1.5">
                       <Lock className="w-3.5 h-3.5" strokeWidth={1.5} />
                     </span>
                   }
                 />
-                <Input label="MM / YY"  id="expiry" value={form.expiry} onChange={handleChange} />
-                <Input label="CVV"      id="cvv"    value={form.cvv}    onChange={handleChange} />
+                <Input label="MM / YY"  id="expiry" value={form.expiry} onChange={handleChange}
+                  required
+                  inputMode="numeric"
+                  autoComplete="cc-exp"
+                  pattern="(0[1-9]|1[0-2])\/\d{2}"
+                  title="MM/YY format, e.g. 09/28"
+                />
+                <Input label="CVV"      id="cvv"    value={form.cvv}    onChange={handleChange}
+                  required
+                  inputMode="numeric"
+                  autoComplete="cc-csc"
+                  pattern="\d{3}"
+                  title="3-digit security code"
+                />
               </div>
 
               <div className="flex items-center gap-2 mt-6 text-outline">
@@ -154,8 +210,7 @@ export default function Checkout() {
               <Button
                 variant="secondary"
                 className="w-full"
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={submitting || cartItems.length === 0}
               >
                 {submitting ? 'Processing…' : `Place Order — $${fmt(total)}`}
@@ -224,8 +279,7 @@ export default function Checkout() {
                 <Button
                   variant="secondary"
                   className="w-full"
-                  type="button"
-                  onClick={handleSubmit}
+                  type="submit"
                   disabled={submitting || cartItems.length === 0}
                 >
                   {submitting ? 'Processing…' : 'Place Order'}

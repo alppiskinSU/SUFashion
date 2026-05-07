@@ -22,8 +22,11 @@ export default function Navbar() {
 
   const handleSignOut = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     setUser(null);
+    // Tell CartContext (and anything else) the active user just changed
+    window.dispatchEvent(new Event('auth-changed'));
     navigate('/');
   };
 

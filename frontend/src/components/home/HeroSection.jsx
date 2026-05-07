@@ -1,7 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 
 export default function HeroSection() {
+  const navigate = useNavigate();
   return (
     <section className="relative w-full h-auto min-h-[90vh] bg-surface flex flex-col justify-center items-center px-8 overflow-hidden pt-24 pb-32">
       {/* Decorative Accent Element using the new #FFDE59 Secondary color */}
@@ -23,7 +25,11 @@ export default function HeroSection() {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-6">
-          <Button variant="primary" className="px-12 py-5 text-sm md:text-base tracking-[0.25em]">
+          <Button
+            variant="primary"
+            className="px-12 py-5 text-sm md:text-base tracking-[0.25em]"
+            onClick={() => navigate('/collections')}
+          >
             Collections
           </Button>
         </div>

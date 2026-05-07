@@ -192,7 +192,7 @@ export default function OrderConfirmation() {
                   if (!res.ok) throw new Error(data.error);
                   if (data.previewUrl) setPreviewUrl(data.previewUrl);
                   setEmailStatus('sent');
-                } catch (err) {
+                } catch {
                   setEmailStatus('error');
                 }
               }}>
@@ -215,23 +215,15 @@ export default function OrderConfirmation() {
                 )}
                 {emailStatus === 'sent' && previewUrl && (
                   <div className="mt-4 border border-outline-variant bg-surface-container p-4">
-                    <p className="text-[10px] uppercase tracking-widest text-outline mb-2">
-                      PDF invoice emailed (Ethereal preview)
-                    </p>
-                    <a
-                      href={previewUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] uppercase tracking-widest font-bold text-primary underline underline-offset-4 hover:opacity-80 break-all"
-                    >
-                      Open invoice email preview
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-2">Invoice emailed — preview:</p>
+                    <a href={previewUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] uppercase tracking-widest font-bold text-primary underline underline-offset-4 hover:opacity-80 break-all">
+                      Open Email Preview →
                     </a>
                   </div>
                 )}
                 {emailStatus === 'sent' && !previewUrl && (
-                  <p className="text-emerald-600 text-[10px] uppercase tracking-widest mt-2">
-                    Invoice PDF sent to your email.
-                  </p>
+                  <p className="text-emerald-600 text-[10px] uppercase tracking-widest mt-2">Invoice sent to {invoiceEmail}</p>
                 )}
               </form>
             </div>
