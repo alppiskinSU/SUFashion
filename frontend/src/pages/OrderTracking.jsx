@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { authFetch } from '../lib/authFetch';
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -58,11 +59,36 @@ function OrderCard({ order }) {
     <div className="bg-surface-container-low">
 
       {/* Card header */}
-      <button
+      <div
         onClick={() => setExpanded(e => !e)}
-        className="w-full text-left p-8 md:p-10 flex flex-col sm:flex-row sm:items-center gap-4 group"
+        className="cursor-pointer w-full p-8 md:p-10 flex flex-col sm:flex-row sm:items-center gap-6 group"
       >
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Product thumbnail preview — separate Link so click navigates without toggling card */}
+        <Link
+          to={`/product/${order.product_id}`}
+          onClick={e => e.stopPropagation()}
+          className="flex-none flex items-center gap-4 hover:opacity-75 transition-opacity"
+        >
+          <div className="bg-surface-container overflow-hidden flex-none w-14" style={{ height: '72px' }}>
+            {order.products?.image_url
+              ? <img
+                  src={order.products.image_url}
+                  alt={order.products.name}
+                  className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                />
+              : <div className="w-full h-full flex items-center justify-center">
+                  <Package className="w-5 h-5 text-outline" strokeWidth={1} />
+                </div>
+            }
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Product</p>
+            <p className="text-sm font-bold text-primary max-w-[140px] truncate">{order.products?.name ?? '—'}</p>
+            <p className="text-[10px] text-outline mt-0.5">Qty: {order.quantity}</p>
+          </div>
+        </Link>
+
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Order</p>
             <p className="text-sm font-bold text-primary">{order.id}</p>
@@ -71,7 +97,7 @@ function OrderCard({ order }) {
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
             <p className="text-sm text-primary">{order.created_at ? new Date(order.created_at).toLocaleDateString() : '—'}</p>
           </div>
-          <div>
+          <div className="hidden sm:block">
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Total</p>
             <p className="text-sm text-primary">${fmt(order.total_price)}</p>
           </div>
@@ -89,7 +115,7 @@ function OrderCard({ order }) {
             : <ChevronDown className="w-5 h-5" strokeWidth={1.5} />
           }
         </div>
-      </button>
+      </div>
 
       {/* Expanded detail */}
       {expanded && (
@@ -103,7 +129,11 @@ function OrderCard({ order }) {
           {/* Items */}
           <div className="mt-10 space-y-6">
             <p className="text-[10px] uppercase tracking-widest text-outline">Items</p>
-            <div className="flex gap-5 group/item">
+            <Link
+              to={`/product/${order.product_id}`}
+              className="flex gap-5 group/item hover:opacity-80 transition-opacity"
+              onClick={e => e.stopPropagation()}
+            >
               <div className="w-16 h-20 bg-surface-container flex-none overflow-hidden">
                 <img
                   src={order.products?.image_url}
@@ -112,13 +142,16 @@ function OrderCard({ order }) {
                 />
               </div>
               <div className="flex-1 flex flex-col justify-between py-0.5">
-                <h4 className="text-sm font-bold uppercase tracking-wider text-primary">{order.products?.name}</h4>
+                <div>
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-primary group-hover/item:underline">{order.products?.name}</h4>
+                  <p className="text-[10px] uppercase tracking-widest text-outline mt-1">View product →</p>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {order.quantity}</span>
                   <span className="text-sm font-medium text-primary">${fmt(order.products?.price * order.quantity)}</span>
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
 
           {/* View invoice link */}
@@ -141,10 +174,7 @@ export default function OrderTracking() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:3000/api/orders/user/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch('http://localhost:3000/api/orders/user/me')
       .then(r => r.json())
       .then(data => setOrders(data.orders ?? []))
       .catch(() => setOrders([]))

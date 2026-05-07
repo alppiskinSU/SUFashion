@@ -38,6 +38,7 @@ export default function Navbar() {
             <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
             <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
             <Link to="/about" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/about' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>About</Link>
+            <Link to="/contact" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/contact' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Contact</Link>
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">

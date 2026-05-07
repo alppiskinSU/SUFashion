@@ -10,7 +10,7 @@ export default function HeroSection() {
       {/* Editorial typography layout matching #2B2B2B and #EDEAE9 theme */}
       <div className="relative z-10 text-center text-primary max-w-6xl mx-auto flex flex-col items-center">
         <span className="uppercase tracking-[0.4em] text-sm md:text-base mb-8 block font-medium font-sans text-outline">
-          Spring / Summer 2024
+          Spring / Summer 2026
         </span>
         
         <h1 className="text-6xl md:text-[8rem] lg:text-[11rem] font-serif tracking-tighter leading-[0.85] mb-12">
@@ -24,10 +24,7 @@ export default function HeroSection() {
         
         <div className="flex flex-col sm:flex-row gap-6">
           <Button variant="primary" className="px-12 py-5 text-sm md:text-base tracking-[0.25em]">
-            Discover Atelier
-          </Button>
-          <Button variant="ghost" className="px-12 py-5 text-sm md:text-base tracking-[0.25em] border-primary text-primary hover:bg-primary hover:text-white">
-            View Lookbook
+            Collections
           </Button>
         </div>
       </div>

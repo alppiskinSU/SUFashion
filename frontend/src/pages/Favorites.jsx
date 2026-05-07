@@ -4,6 +4,7 @@ import { ArrowLeft, Heart, Trash2 } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { useCart } from '../contexts/CartContext';
+import { authFetch } from '../lib/authFetch';
 
 function FavoriteCard({ product, onRemove }) {
   const { addToCart } = useCart();
@@ -82,10 +83,7 @@ export default function Favorites() {
       return;
     }
 
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:3000/api/favorites', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch('http://localhost:3000/api/favorites')
       .then(r => r.json())
       .then(data => setFavorites(data.favorites ?? []))
       .catch(() => setFavorites([]))
@@ -93,11 +91,7 @@ export default function Favorites() {
   }, [navigate]);
 
   const handleRemove = async (productId) => {
-    const token = localStorage.getItem('token');
-    await fetch(`http://localhost:3000/api/favorites/${productId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await authFetch(`http://localhost:3000/api/favorites/${productId}`, { method: 'DELETE' });
     setFavorites(prev => prev.filter(p => p.id !== productId));
   };
 

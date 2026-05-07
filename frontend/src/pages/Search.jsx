@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
@@ -6,12 +6,29 @@ import Footer from '../components/layout/Footer';
 import ProductCard from '../components/ui/ProductCard';
 import { supabase } from '../lib/supabase';
 
+const SORT_OPTIONS = [
+  { value: '', label: 'Relevance' },
+  { value: 'price_asc', label: 'Price: Low → High' },
+  { value: 'price_desc', label: 'Price: High → Low' },
+  { value: 'popularity', label: 'Popularity' },
+];
+
+function sortResults(items, sort) {
+  if (!sort) return items;
+  const copy = [...items];
+  if (sort === 'price_asc')  return copy.sort((a, b) => a.price - b.price);
+  if (sort === 'price_desc') return copy.sort((a, b) => b.price - a.price);
+  if (sort === 'popularity') return copy.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+  return copy;
+}
+
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [sort, setSort] = useState('');
 
   const doSearch = async (q) => {
     if (!q.trim()) { setResults([]); setSearched(false); return; }
@@ -81,9 +98,32 @@ export default function Search() {
           <p className="text-outline text-xs uppercase tracking-widest animate-pulse">Searching...</p>
         ) : searched ? (
           <>
-            <p className="text-outline text-xs uppercase tracking-widest mb-10">
-              {results.length} result{results.length !== 1 ? 's' : ''} for "{searchParams.get('q')}"
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10">
+              <p className="text-outline text-xs uppercase tracking-widest">
+                {results.length} result{results.length !== 1 ? 's' : ''} for &ldquo;{searchParams.get('q')}&rdquo;
+              </p>
+
+              {results.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] uppercase tracking-widest text-outline">Sort by</span>
+                  <div className="flex gap-2 flex-wrap">
+                    {SORT_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setSort(opt.value)}
+                        className={`px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold border transition-colors ${
+                          sort === opt.value
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-outline-variant text-outline hover:border-primary hover:text-primary'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {results.length === 0 ? (
               <div className="text-center py-24">
@@ -92,7 +132,7 @@ export default function Search() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-12">
-                {results.map(product => (
+                {sortResults(results, sort).map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>

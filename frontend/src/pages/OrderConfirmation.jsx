@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle, Printer, ArrowLeft, Package, Mail } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import { authFetch } from '../lib/authFetch';
 
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
@@ -17,10 +18,7 @@ export default function OrderConfirmation() {
   const [emailStatus, setEmailStatus] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`http://localhost:3000/api/orders/${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch(`http://localhost:3000/api/orders/${orderId}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) setError(data.error);
@@ -183,10 +181,9 @@ export default function OrderConfirmation() {
                 if (!invoiceEmail) return;
                 setEmailStatus('sending');
                 try {
-                  const token = localStorage.getItem('token');
-                  const res = await fetch(`http://localhost:3000/api/invoice/${orderId}/send`, {
+                  const res = await authFetch(`http://localhost:3000/api/invoices/send/${orderId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: invoiceEmail }),
                   });
                   const data = await res.json();

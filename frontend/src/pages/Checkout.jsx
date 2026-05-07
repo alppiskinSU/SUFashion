@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Lock, Truck, ShieldCheck } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
@@ -6,6 +6,7 @@ import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useCart } from '../contexts/CartContext';
+import { authFetch } from '../lib/authFetch';
 
 
 /* ── Helpers ── */
@@ -45,8 +46,7 @@ export default function Checkout() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!localStorage.getItem('token')) {
       navigate('/login');
       return;
     }
@@ -54,12 +54,9 @@ export default function Checkout() {
     try {
       let lastOrderId = null;
       for (const item of cartItems) {
-        const res = await fetch('http://localhost:3000/api/orders', {
+        const res = await authFetch('http://localhost:3000/api/orders', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ product_id: item.product_id ?? item.id, quantity: item.quantity }),
         });
         const data = await res.json();

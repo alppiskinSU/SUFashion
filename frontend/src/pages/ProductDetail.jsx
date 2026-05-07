@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingBag, Heart, Minus, Plus, Package, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Heart, Minus, Plus, Package, AlertTriangle, Star } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 import { useCart } from '../contexts/CartContext';
 import { supabase } from '../lib/supabase';
+import { authFetch } from '../lib/authFetch';
 
 /* ── Stock badge component ── */
 function StockBadge({ quantity }) {
@@ -44,6 +45,12 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState('');
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -56,9 +63,7 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!currentUser?.id || !product?.id) return;
     const controller = new AbortController();
-    const token = localStorage.getItem('token');
-    fetch(`http://localhost:3000/api/favorites/check/${product.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    authFetch(`http://localhost:3000/api/favorites/check/${product.id}`, {
       signal: controller.signal,
     })
       .then(r => r.json())
@@ -74,11 +79,9 @@ export default function ProductDetail() {
     }
     const next = !isFavorited;
     setIsFavorited(next);
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:3000/api/favorites/${product.id}`, {
+      const res = await authFetch(`http://localhost:3000/api/favorites/${product.id}`, {
         method: isFavorited ? 'DELETE' : 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) setIsFavorited(!next);
     } catch {
@@ -125,6 +128,14 @@ export default function ProductDetail() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!product?.id) return;
+    fetch(`http://localhost:3000/api/reviews/${product.id}`)
+      .then(r => r.json())
+      .then(data => setReviews(data.reviews ?? []))
+      .catch(() => {});
+  }, [product?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-surface">
@@ -150,6 +161,30 @@ export default function ProductDetail() {
       </div>
     );
   }
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewRating) return setReviewMessage('Please select a star rating.');
+    if (!reviewComment.trim()) return setReviewMessage('Please write a comment.');
+    setReviewSubmitting(true);
+    setReviewMessage('');
+    try {
+      const res = await authFetch(`http://localhost:3000/api/reviews/${product.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setReviewMessage('Your review has been submitted and is awaiting approval.');
+      setReviewRating(0);
+      setReviewComment('');
+    } catch (err) {
+      setReviewMessage(err.message || 'Failed to submit review.');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const isSoldOut = product.isSoldOut || product.quantity === 0;
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
@@ -300,6 +335,90 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
+        {/* ── Reviews Section ── */}
+        <section className="mt-24 border-t border-outline-variant pt-16">
+          <h2 className="font-serif italic text-3xl text-primary mb-12">
+            Reviews {reviews.length > 0 && <span className="text-outline text-xl not-italic">({reviews.length})</span>}
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+
+            {/* ── Existing reviews ── */}
+            <div className="space-y-8">
+              {reviews.length === 0 ? (
+                <p className="text-outline text-sm uppercase tracking-widest">No reviews yet. Be the first!</p>
+              ) : reviews.map(r => (
+                <div key={r.id} className="border-b border-outline-variant pb-8">
+                  <div className="flex items-center gap-1 mb-2">
+                    {[1,2,3,4,5].map(s => (
+                      <Star key={s} className="w-4 h-4" strokeWidth={1}
+                        fill={s <= r.rating ? 'currentColor' : 'none'}
+                        style={{ color: s <= r.rating ? '#f59e0b' : undefined }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-outline">{r.user_name}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Submit review form ── */}
+            <div>
+              <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-8">Write a Review</h3>
+              {!currentUser ? (
+                <p className="text-sm text-outline">
+                  <a href="/login" className="underline underline-offset-4 hover:text-primary">Sign in</a> to leave a review.
+                </p>
+              ) : (
+                <form onSubmit={submitReview} className="space-y-6">
+                  {/* Star picker */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-3">Your Rating</p>
+                    <div className="flex items-center gap-1">
+                      {[1,2,3,4,5].map(s => (
+                        <button key={s} type="button"
+                          onMouseEnter={() => setReviewHover(s)}
+                          onMouseLeave={() => setReviewHover(0)}
+                          onClick={() => setReviewRating(s)}
+                        >
+                          <Star className="w-7 h-7 transition-colors" strokeWidth={1}
+                            fill={(reviewHover || reviewRating) >= s ? 'currentColor' : 'none'}
+                            style={{ color: (reviewHover || reviewRating) >= s ? '#f59e0b' : '#9ca3af' }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Comment */}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-3">Your Comment</p>
+                    <textarea
+                      rows={4}
+                      value={reviewComment}
+                      onChange={e => setReviewComment(e.target.value)}
+                      placeholder="Share your thoughts about this product..."
+                      className="w-full bg-surface-container border border-outline-variant px-4 py-3 text-sm text-primary placeholder:text-outline outline-none focus:border-primary transition-colors resize-none"
+                    />
+                  </div>
+
+                  {reviewMessage && (
+                    <p className={`text-xs uppercase tracking-widest ${reviewMessage.includes('submitted') ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {reviewMessage}
+                    </p>
+                  )}
+
+                  <button type="submit" disabled={reviewSubmitting}
+                    className="px-8 py-3 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+                  >
+                    {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </section>
       </main>
 
       <Footer />

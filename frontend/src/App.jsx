@@ -10,6 +10,7 @@ import OrderTracking from './pages/OrderTracking';
 import About from './pages/About';
 import Search from './pages/Search';
 import Favorites from './pages/Favorites';
+import Contact from './pages/Contact';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="/about" element={<About />} />
         <Route path="/search" element={<Search />} />
         <Route path="/favorites" element={<Favorites />} />
+        <Route path="/contact" element={<Contact />} />
       </Routes>
     </div>
   );
