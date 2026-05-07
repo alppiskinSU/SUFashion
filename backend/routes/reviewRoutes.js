@@ -49,27 +49,43 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    res.status(201).json({ message: 'Review submitted, waiting for approval' });
+    res.status(201).json({
+      message: 'Rating added immediately. Your comment is awaiting approval.',
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get approved reviews for a product
+// Get reviews for a product
+// Ratings are visible immediately; comment text is hidden until approved.
 router.get('/:product_id', async (req, res) => {
   try {
     const { data: reviews, error } = await supabase
       .from('reviews')
-      .select('*, profiles(name)')
+      .select('*')
       .eq('product_id', req.params.product_id)
-      .eq('approved', true);
+      .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const mapped = reviews.map(r => ({
+    // Fetch the matching profile names in a separate query (no FK between
+    // reviews.user_id and profiles.id is defined in this schema).
+    const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+    let nameById = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
+    }
+
+    const mapped = (reviews || []).map(r => ({
       ...r,
-      user_name: r.profiles?.name || 'Anonymous',
-      profiles: undefined,
+      user_name: nameById[r.user_id] || 'Anonymous',
+      comment: r.approved ? r.comment : null,
+      comment_pending: !r.approved,
     }));
 
     res.json({ reviews: mapped });

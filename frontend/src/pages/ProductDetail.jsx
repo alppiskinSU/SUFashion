@@ -176,9 +176,17 @@ export default function ProductDetail() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setReviewMessage('Your review has been submitted and is awaiting approval.');
+      setReviewMessage(
+        data.message ||
+          'Rating added immediately. Your comment is awaiting approval.'
+      );
       setReviewRating(0);
       setReviewComment('');
+      // Refresh reviews so the new rating shows up right away
+      fetch(`http://localhost:3000/api/reviews/${product.id}`)
+        .then(r => r.json())
+        .then(d => setReviews(d.reviews ?? []))
+        .catch(() => {});
     } catch (err) {
       setReviewMessage(err.message || 'Failed to submit review.');
     } finally {
@@ -357,7 +365,13 @@ export default function ProductDetail() {
                       />
                     ))}
                   </div>
-                  <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
+                  {r.comment ? (
+                    <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
+                  ) : (
+                    <p className="text-sm italic text-outline leading-relaxed mb-2">
+                      Comment awaiting approval
+                    </p>
+                  )}
                   <p className="text-[10px] uppercase tracking-widest text-outline">{r.user_name}</p>
                 </div>
               ))}
@@ -404,7 +418,7 @@ export default function ProductDetail() {
                   </div>
 
                   {reviewMessage && (
-                    <p className={`text-xs uppercase tracking-widest ${reviewMessage.includes('submitted') ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <p className={`text-xs uppercase tracking-widest ${/added|submitted|approval/i.test(reviewMessage) ? 'text-emerald-600' : 'text-red-500'}`}>
                       {reviewMessage}
                     </p>
                   )}
