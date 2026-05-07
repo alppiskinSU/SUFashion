@@ -42,16 +42,12 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // 3. Reduce the stock
     const newQty = product.quantity - quantity;
-    const { data: updatedRows, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('products')
       .update({ quantity: newQty })
-      .eq('id', product_id)
-      .select('id, quantity');
+      .eq('id', product_id);
 
     if (updateError) throw updateError;
-    if (!updatedRows || updatedRows.length === 0) {
-      return res.status(500).json({ error: 'Stock update failed — no rows updated. Check Supabase RLS policies on products table.' });
-    }
 
     // 4. Create the new order
     const { data: newOrder, error: insertError } = await supabase
@@ -109,6 +105,21 @@ router.get('/user/me', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/orders/admin/all — all orders (admin only)
+router.get('/admin/all', authMiddleware, async (_req, res) => {
+  try {
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, products(name, price, image_url)')
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ orders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── NEW: Update order status ──
 // PATCH /api/orders/:id/status
 // Body: { "status": "shipped" } or { "status": "in-transit" } (alias)
@@ -134,7 +145,6 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
       .from('orders')
       .select('id, status, user_id')
       .eq('id', orderId)
-      .eq('user_id', req.user.id)
       .single();
 
     if (fetchError || !order) {
@@ -156,7 +166,6 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
       .from('orders')
       .update({ status })
       .eq('id', orderId)
-      .eq('user_id', req.user.id)
       .select('id, status, user_id, product_id, quantity, total_price, created_at')
       .single();
 

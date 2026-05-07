@@ -30,9 +30,9 @@ export default function CollectionFilter({ categories, onFilterChange, sortMode,
 
   return (
     <div className="w-full border-y border-outline-variant/30 bg-surface-container-lowest sticky top-[88px] z-40">
-      <div className="max-w-[1400px] mx-auto px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="max-w-[1400px] mx-auto px-8 py-4 flex flex-col gap-4">
         {/* Categories */}
-        <div className="flex gap-8 overflow-x-auto w-full md:w-auto scrollbar-hide pb-2 md:pb-0">
+        <div className="flex gap-8 overflow-x-auto scrollbar-hide pb-1">
           <button
             onClick={() => handleCategoryClick('all')}
             className={`label-sm whitespace-nowrap transition-colors border-b-2 pb-1 ${activeCategory === 'all' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}

@@ -10,27 +10,31 @@ router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) =
   try {
     const { data: reviews, error } = await supabase
       .from('reviews')
-      .select('*, products(name)')
+      .select('*')
       .eq('approved', false)
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
-    let nameById = {};
-    if (userIds.length) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .in('id', userIds);
-      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
-    }
+    const userIds    = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+    const productIds = [...new Set((reviews || []).map(r => r.product_id).filter(Boolean))];
+
+    const [{ data: profiles }, { data: products }] = await Promise.all([
+      userIds.length
+        ? supabase.from('profiles').select('id, name').in('id', userIds)
+        : Promise.resolve({ data: [] }),
+      productIds.length
+        ? supabase.from('products').select('id, name').in('id', productIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const nameById    = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
+    const productById = Object.fromEntries((products || []).map(p => [p.id, p.name]));
 
     const mapped = (reviews || []).map(r => ({
       ...r,
-      user_name: nameById[r.user_id] || 'Anonymous',
-      product_name: r.products?.name || 'Unknown Product',
-      products: undefined,
+      user_name:    nameById[r.user_id]       || 'Anonymous',
+      product_name: productById[r.product_id] || 'Unknown Product',
     }));
 
     res.json({ reviews: mapped });
@@ -73,7 +77,6 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 // comment text is only returned for approved reviews
 router.get('/:product_id', async (req, res) => {
   try {
-    // Service role bypasses RLS — reads all reviews regardless of approved status
     const { data: allReviews, error } = await supabase
       .from('reviews')
       .select('*')
@@ -82,7 +85,6 @@ router.get('/:product_id', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Fetch profile names separately (avoids FK dependency issues)
     const userIds = [...new Set((allReviews || []).map(r => r.user_id).filter(Boolean))];
     let nameById = {};
     if (userIds.length) {
