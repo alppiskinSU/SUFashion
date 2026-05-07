@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle, XCircle, Star, Clock,
-  AlertTriangle, Inbox, Package, Truck, ChevronRight,
+  AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { authFetch } from '../lib/authFetch';
+import StockManager from '../components/admin/StockManager';
 
 const STATUS_LABEL = {
   processing: 'Processing',
@@ -166,6 +167,7 @@ export default function AdminPanel() {
           {[
             { key: 'comments', label: `Comments (${reviews.length} pending)` },
             { key: 'orders',   label: `Orders (${orders.length})` },
+            { key: 'stock',    label: 'Stock' },
           ].map(t => (
             <button
               key={t.key}
@@ -184,10 +186,20 @@ export default function AdminPanel() {
         {/* ── COMMENTS TAB ── */}
         {tab === 'comments' && (
           <>
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={fetchReviews}
+                disabled={reviewsLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${reviewsLoading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
+                Refresh
+              </button>
+            </div>
             {reviewsError && (
               <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border border-red-200 mb-8">
                 <AlertTriangle className="w-4 h-4 text-red-500" strokeWidth={1.5} />
-                <p className="text-sm text-red-600">{reviewsError}</p>
+                <p className="text-sm text-red-600">Could not load pending reviews: {reviewsError}</p>
               </div>
             )}
             {reviewsLoading ? (
@@ -315,6 +327,11 @@ export default function AdminPanel() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── STOCK TAB ── */}
+        {tab === 'stock' && (
+          <StockManager onToast={showToast} />
         )}
       </main>
 

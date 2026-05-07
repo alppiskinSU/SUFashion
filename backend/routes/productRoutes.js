@@ -85,6 +85,48 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
   }
 });
 
+// PATCH /api/products/:id — admin only (used by the stock manager)
+// Only allow whitelisted columns to keep this endpoint focused.
+router.patch('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const allowed = ['name', 'category', 'description', 'price', 'image_url',
+      'quantity', 'is_limited', 'old_price', 'model', 'serial_number',
+      'warranty_status', 'distributor_info', 'popularity'];
+    const updates = {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No editable fields supplied.' });
+    }
+
+    if (updates.quantity !== undefined) {
+      const q = Number(updates.quantity);
+      if (!Number.isFinite(q) || q < 0) {
+        return res.status(400).json({ error: 'Quantity must be a non-negative number.' });
+      }
+      updates.quantity = q;
+    }
+
+    const { data: product, error } = await supabase
+      .from('products')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error)   return res.status(500).json({ error: error.message });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    res.json({ product });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/products/:id — admin only
 router.delete('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
