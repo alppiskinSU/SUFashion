@@ -1,12 +1,19 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 import { X } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 
 export default function QuickLookDrawer({ isOpen, onClose }) {
   const { items, removeFromCart, cartTotal } = useCart();
+  const navigate = useNavigate();
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
+
+  const handleCheckout = () => {
+    onClose();
+    const user = localStorage.getItem('user');
+    navigate(user ? '/checkout' : '/login');
+  };
 
   return (
     <div 
@@ -84,11 +91,9 @@ export default function QuickLookDrawer({ isOpen, onClose }) {
               <span className="text-sm uppercase tracking-widest font-bold text-primary">Total</span>
               <span className="text-xl font-medium text-primary">${fmt(cartTotal)}</span>
             </div>
-            <Link to="/checkout" onClick={onClose} className="w-full block">
-              <Button variant="secondary" className="w-full">
-                Proceed to Checkout
-              </Button>
-            </Link>
+            <Button variant="secondary" className="w-full" onClick={handleCheckout}>
+              Proceed to Checkout
+            </Button>
           </div>
         )}
       </div>
