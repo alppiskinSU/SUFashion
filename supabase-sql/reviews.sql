@@ -3,7 +3,14 @@
 -- Supabase Project: eatekbcknwqxfunyuwel
 -- Schema source: Supabase OpenAPI (service role)
 -- NOT NULL: id, user_id, product_id, rating
--- Reviews require approval before being visible
+--
+-- Two-tier approval logic (enforced in backend, not RLS):
+--   rating  → immediately active; counted in avg_rating for all reviews
+--   comment → requires admin to set approved=TRUE before it is shown
+--
+-- The RLS SELECT policy only exposes approved rows to anon/auth users.
+-- The backend uses the service role key to read ALL rows for avg_rating
+-- computation, then filters the response to only surface approved comments.
 -- =============================================
 
 CREATE TABLE IF NOT EXISTS public.reviews (
