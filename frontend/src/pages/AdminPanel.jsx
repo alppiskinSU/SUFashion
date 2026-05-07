@@ -98,6 +98,34 @@ export default function AdminPanel() {
 
   useEffect(() => { fetchReviews(); fetchOrders(); }, []);
 
+  // Auto-refresh while the admin tab is active so newly submitted comments
+  // show up without a manual refresh.
+  useEffect(() => {
+    const POLL_MS = 8000;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (tab === 'comments') fetchReviews();
+      if (tab === 'orders')   fetchOrders();
+    };
+    const interval = setInterval(tick, POLL_MS);
+    const onVisibility = () => { if (document.visibilityState === 'visible') tick(); };
+    const onFocus = () => tick();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [tab]);
+
+  // Refetch whenever the user switches to a tab so it always reflects the
+  // latest server state.
+  useEffect(() => {
+    if (tab === 'comments') fetchReviews();
+    if (tab === 'orders')   fetchOrders();
+  }, [tab]);
+
   /* ── Review actions ── */
   const handleReviewAction = async (id, action) => {
     setActionLoading(id);
