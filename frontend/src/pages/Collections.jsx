@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 export default function Collections() {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [sort, setSort] = useState('');
   const [categories, setCategories] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -65,6 +66,14 @@ export default function Collections() {
     oldPrice: p.old_price,
   });
 
+  const getSorted = (items) => {
+    const copy = [...items];
+    if (sort === 'price_asc')  return copy.sort((a, b) => a.price - b.price);
+    if (sort === 'price_desc') return copy.sort((a, b) => b.price - a.price);
+    if (sort === 'popularity') return copy.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+    return copy;
+  };
+
   const handleFilterChange = (categoryId) => {
     if (categoryId === 'all') {
       setSearchParams({});
@@ -88,9 +97,13 @@ export default function Collections() {
           coverImage="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=2000"
         />
 
-        <CollectionFilter categories={categories} onFilterChange={handleFilterChange} />
+        <CollectionFilter
+          categories={categories}
+          onFilterChange={handleFilterChange}
+          onSortChange={setSort}
+        />
 
-        <CollectionGrid products={filteredProducts} />
+        <CollectionGrid products={getSorted(filteredProducts)} />
       </main>
 
       <Footer />

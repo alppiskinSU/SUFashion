@@ -19,8 +19,7 @@ router.post('/register', async (req, res) => {
     // Save extra profile info
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({ name, home_address, tax_id })
-      .eq('id', data.user.id);
+      .upsert({ id: data.user.id, name, home_address, tax_id, role: 'customer' });
 
     if (profileError) return res.status(400).json({ error: profileError.message });
 
