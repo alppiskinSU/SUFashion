@@ -53,11 +53,13 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
     if (rating < 1 || rating > 5)
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
 
+    const hasComment = comment && comment.trim().length > 0;
     const { error } = await supabase.from('reviews').insert({
       user_id: req.user.id,
       product_id: req.params.product_id,
       rating,
-      comment,
+      comment: hasComment ? comment : null,
+      approved: !hasComment,
     });
 
     if (error) return res.status(500).json({ error: error.message });

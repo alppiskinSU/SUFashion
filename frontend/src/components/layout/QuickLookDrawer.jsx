@@ -1,23 +1,30 @@
-import React from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
-import { X } from 'lucide-react';
+import { X, LogIn } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 
 export default function QuickLookDrawer({ isOpen, onClose }) {
   const { items, removeFromCart, cartTotal } = useCart();
   const navigate = useNavigate();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
   const handleCheckout = () => {
-    onClose();
     const isLoggedIn = !!localStorage.getItem('token');
     if (!isLoggedIn) {
-      sessionStorage.setItem('postLoginRedirect', '/checkout');
-      navigate('/login', { state: { from: '/checkout' } });
+      setShowLoginPrompt(true);
     } else {
+      onClose();
       navigate('/checkout');
     }
+  };
+
+  const handleGoToLogin = () => {
+    onClose();
+    setShowLoginPrompt(false);
+    sessionStorage.setItem('postLoginRedirect', '/checkout');
+    navigate('/login', { state: { from: '/checkout' } });
   };
 
   return (
@@ -96,9 +103,33 @@ export default function QuickLookDrawer({ isOpen, onClose }) {
               <span className="text-sm uppercase tracking-widest font-bold text-primary">Total</span>
               <span className="text-xl font-medium text-primary">${fmt(cartTotal)}</span>
             </div>
-            <Button variant="secondary" className="w-full" onClick={handleCheckout}>
-              Proceed to Checkout
-            </Button>
+
+            {showLoginPrompt ? (
+              <div className="space-y-4">
+                <div className="bg-surface-container border border-outline-variant px-5 py-4">
+                  <p className="text-[11px] uppercase tracking-widest font-bold text-primary mb-1">
+                    Sign in required
+                  </p>
+                  <p className="text-xs text-outline leading-relaxed">
+                    You need to log in to complete your purchase.
+                  </p>
+                </div>
+                <Button variant="secondary" className="w-full flex items-center justify-center gap-2" onClick={handleGoToLogin}>
+                  <LogIn className="w-4 h-4" strokeWidth={1.5} />
+                  Sign In to Checkout
+                </Button>
+                <button
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="w-full text-center text-[10px] uppercase tracking-widest text-outline hover:text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <Button variant="secondary" className="w-full" onClick={handleCheckout}>
+                Proceed to Checkout
+              </Button>
+            )}
           </div>
         )}
       </div>

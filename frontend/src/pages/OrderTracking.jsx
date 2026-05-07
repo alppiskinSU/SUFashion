@@ -23,8 +23,10 @@ const stepIcons = {
 
 const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+const normalizeStatus = (s) => s === 'shipped' ? 'in-transit' : s;
+
 function StatusTimeline({ currentStatus }) {
-  const currentIdx = STATUS_STEPS.indexOf(currentStatus);
+  const currentIdx = STATUS_STEPS.indexOf(normalizeStatus(currentStatus));
   return (
     <div className="flex items-center gap-0 mt-6">
       {STATUS_STEPS.map((step, idx) => {
@@ -53,7 +55,7 @@ function StatusTimeline({ currentStatus }) {
 
 function OrderCard({ order }) {
   const [expanded, setExpanded] = useState(false);
-  const cfg = statusConfig[order.status] ?? statusConfig.processing;
+  const cfg = statusConfig[normalizeStatus(order.status)] ?? statusConfig.processing;
 
   return (
     <div className="bg-surface-container-low">

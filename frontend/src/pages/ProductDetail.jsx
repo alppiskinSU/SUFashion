@@ -165,7 +165,6 @@ export default function ProductDetail() {
   const submitReview = async (e) => {
     e.preventDefault();
     if (!reviewRating) return setReviewMessage('Please select a star rating.');
-    if (!reviewComment.trim()) return setReviewMessage('Please write a comment.');
     setReviewSubmitting(true);
     setReviewMessage('');
     try {
@@ -367,11 +366,9 @@ export default function ProductDetail() {
                   </div>
                   {r.comment ? (
                     <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
-                  ) : (
-                    <p className="text-sm italic text-outline leading-relaxed mb-2">
-                      Comment awaiting approval
-                    </p>
-                  )}
+                  ) : r.comment_pending ? (
+                    <p className="text-sm italic text-outline leading-relaxed mb-2">Comment awaiting approval</p>
+                  ) : null}
                   <p className="text-[10px] uppercase tracking-widest text-outline">{r.user_name}</p>
                 </div>
               ))}
