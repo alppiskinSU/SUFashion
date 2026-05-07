@@ -135,14 +135,15 @@ export default function ProductDetail() {
 
   /* fetch product + real-time subscription */
   useEffect(() => {
-    const fetchProduct = async () => {
-      setLoading(true);
+    let cancelled = false;
+    const fetchProduct = async ({ silent = false } = {}) => {
+      if (!silent) setLoading(true);
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .eq('id', id)
         .single();
-
+      if (cancelled) return;
       if (!error && data) {
         setProduct({
           ...data,
@@ -151,22 +152,39 @@ export default function ProductDetail() {
           isLimited: data.is_limited,
           oldPrice: data.old_price,
         });
-      } else {
+      } else if (!silent) {
         setProduct(null);
       }
-      setLoading(false);
+      if (!silent) setLoading(false);
     };
 
     fetchProduct();
 
+    // Realtime subscription — works when the products table is in the
+    // Supabase realtime publication.
     const channel = supabase
       .channel(`public:products:detail:${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `id=eq.${id}` }, () => {
-        fetchProduct();
+        fetchProduct({ silent: true });
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Fallback: re-fetch whenever the tab regains focus so stock changes
+    // (e.g. after this user just placed an order in another tab) become
+    // visible without a manual reload, even if realtime is not enabled.
+    const onFocus = () => fetchProduct({ silent: true });
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchProduct({ silent: true });
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [id]);
 
   /* fetch reviews */
@@ -219,7 +237,13 @@ export default function ProductDetail() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Submission failed');
-      setSubmitMsg(data.message);
+      const hadComment = !!(reviewForm.comment && reviewForm.comment.trim());
+      setSubmitMsg(
+        data.message ||
+        (hadComment
+          ? 'Your rating is live. Your comment is awaiting admin approval and will appear once reviewed.'
+          : 'Your rating is live and counted in the average rating.')
+      );
       setReviewForm({ rating: 0, comment: '' });
       await fetchReviews();
     } catch (err) {
