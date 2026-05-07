@@ -64,6 +64,20 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
+    // Update product popularity = avg_rating across all reviews (rating-based sort)
+    const { data: allRatings } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('product_id', req.params.product_id);
+
+    if (allRatings && allRatings.length > 0) {
+      const avg = allRatings.reduce((s, r) => s + r.rating, 0) / allRatings.length;
+      await supabase
+        .from('products')
+        .update({ popularity: Math.round(avg * 20) })
+        .eq('id', req.params.product_id);
+    }
+
     res.status(201).json({
       message: 'Your rating is live. Your comment will appear after approval.',
     });

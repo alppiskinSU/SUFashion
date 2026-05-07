@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -6,7 +6,6 @@ import CollectionHero from '../components/collections/CollectionHero';
 import CollectionFilter from '../components/collections/CollectionFilter';
 import CollectionGrid from '../components/collections/CollectionGrid';
 import { supabase } from '../lib/supabase';
-import { sortProducts } from '../lib/sortProducts';
 
 export default function Collections() {
   const [products, setProducts] = useState([]);
@@ -14,57 +13,50 @@ export default function Collections() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sortMode, setSortMode] = useState('default');
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const { data, error } = await supabase.from('products').select('*');
-      if (!error && data) {
-        const mappedData = data.map(mapProductData);
-        setProducts(mappedData);
+  const categoryParam = searchParams.get('category') || '';
 
-        const catSet = new Set();
-        data.forEach((p) => {
-          if (p.category) catSet.add(p.category);
-        });
-        const cats = Array.from(catSet).map((c) => ({ id: c.toLowerCase(), label: c }));
-        setCategories(cats);
-      } else {
-        console.error('Supabase error:', error);
+  async function fetchProducts(sort, category) {
+    const params = new URLSearchParams();
+    if (sort && sort !== 'default') params.set('sort', sort);
+    if (category) params.set('category', category);
+
+    try {
+      const res = await fetch(`http://localhost:3000/api/products?${params}`);
+      const data = await res.json();
+      const mapped = (data.products || []).map(p => ({
+        ...p,
+        image: p.image_url,
+        hoverImage: p.image_url,
+        isSoldOut: p.quantity === 0,
+        isLimited: p.is_limited,
+        oldPrice: p.old_price,
+      }));
+      setProducts(mapped);
+
+      if (!category) {
+        const catSet = new Set(mapped.map(p => p.category).filter(Boolean));
+        setCategories(Array.from(catSet).map(c => ({ id: c.toLowerCase(), label: c })));
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+    }
+  }
 
-    fetchProducts();
+  // Refetch whenever sort or category changes
+  useEffect(() => {
+    fetchProducts(sortMode, categoryParam);
+  }, [sortMode, categoryParam]);
 
+  // Real-time: refetch via backend on product table changes
+  useEffect(() => {
     const channel = supabase
       .channel('public:products:collections')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-        fetchProducts();
+        fetchProducts(sortMode, categoryParam);
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const mapProductData = (p) => ({
-    ...p,
-    image: p.image_url,
-    hoverImage: p.image_url,
-    isSoldOut: p.quantity === 0,
-    isLimited: p.is_limited,
-    oldPrice: p.old_price,
-  });
-
-  const displayProducts = useMemo(() => {
-    const categoryParam = searchParams.get('category');
-    const base =
-      categoryParam
-        ? products.filter(
-            (p) => p.category && p.category.toLowerCase() === categoryParam.toLowerCase()
-          )
-        : products;
-    return sortProducts(base, sortMode);
-  }, [products, searchParams, sortMode]);
+    return () => { supabase.removeChannel(channel); };
+  }, [sortMode, categoryParam]);
 
   const handleFilterChange = (categoryId) => {
     if (categoryId === 'all') {
@@ -92,7 +84,7 @@ export default function Collections() {
           onSortChange={setSortMode}
         />
 
-        <CollectionGrid products={displayProducts} />
+        <CollectionGrid products={products} />
       </main>
 
       <Footer />
