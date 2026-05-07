@@ -16,12 +16,26 @@ router.post('/register', async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
-    // Save extra profile info
+    // Save extra profile info. A DB trigger on auth.users may already have
+    // inserted a profiles row, so use upsert with onConflict to update it
+    // rather than fight an RLS-blocked insert. If profile persistence still
+    // fails (e.g. RLS policy), the auth user is already created — we log the
+    // issue, warn the client, but treat the signup itself as successful so
+    // the user isn't left in limbo. Login will lazily backfill the profile.
     const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({ id: data.user.id, name, home_address, tax_id, role: 'customer' });
+      .upsert(
+        { id: data.user.id, name, home_address, tax_id, role: 'customer' },
+        { onConflict: 'id' }
+      );
 
-    if (profileError) return res.status(400).json({ error: profileError.message });
+    if (profileError) {
+      console.warn('[register] profile upsert failed, continuing:', profileError.message);
+      return res.status(201).json({
+        message: 'Registration successful',
+        warning: 'Profile details could not be saved automatically — you can update them after signing in.',
+      });
+    }
 
     res.status(201).json({ message: 'Registration successful' });
   } catch (err) {
@@ -37,11 +51,23 @@ router.post('/login', async (req, res) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('name, role')
       .eq('id', data.user.id)
       .single();
+
+    // Lazily create a profile row if signup couldn't persist one earlier.
+    // This is a no-op once the row exists.
+    if (!profile) {
+      await supabase
+        .from('profiles')
+        .upsert(
+          { id: data.user.id, name: '', role: 'customer' },
+          { onConflict: 'id' }
+        );
+      profile = { name: '', role: 'customer' };
+    }
 
     res.json({
       token: data.session.access_token,
