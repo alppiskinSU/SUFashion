@@ -10,17 +10,26 @@ router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) =
   try {
     const { data: reviews, error } = await supabase
       .from('reviews')
-      .select('*, profiles(name), products(name)')
+      .select('*, products(name)')
       .eq('approved', false)
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const mapped = reviews.map(r => ({
+    const userIds = [...new Set((reviews || []).map(r => r.user_id).filter(Boolean))];
+    let nameById = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', userIds);
+      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p.name]));
+    }
+
+    const mapped = (reviews || []).map(r => ({
       ...r,
-      user_name: r.profiles?.name || 'Anonymous',
+      user_name: nameById[r.user_id] || 'Anonymous',
       product_name: r.products?.name || 'Unknown Product',
-      profiles: undefined,
       products: undefined,
     }));
 
