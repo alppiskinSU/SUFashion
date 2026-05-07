@@ -59,13 +59,8 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
       user_id: req.user.id,
       product_id: req.params.product_id,
       rating,
-<<<<<<< HEAD
       comment: hasComment ? comment : null,
       approved: !hasComment,
-=======
-      comment: comment || null,
-      approved: false,
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
     });
 
     if (error) return res.status(500).json({ error: error.message });

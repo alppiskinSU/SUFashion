@@ -239,40 +239,7 @@ export default function ProductDetail() {
     );
   }
 
-<<<<<<< HEAD
-  const submitReview = async (e) => {
-    e.preventDefault();
-    if (!reviewRating) return setReviewMessage('Please select a star rating.');
-    setReviewSubmitting(true);
-    setReviewMessage('');
-    try {
-      const res = await authFetch(`http://localhost:3000/api/reviews/${product.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setReviewMessage(
-        data.message ||
-          'Rating added immediately. Your comment is awaiting approval.'
-      );
-      setReviewRating(0);
-      setReviewComment('');
-      // Refresh reviews so the new rating shows up right away
-      fetch(`http://localhost:3000/api/reviews/${product.id}`)
-        .then(r => r.json())
-        .then(d => setReviews(d.reviews ?? []))
-        .catch(() => {});
-    } catch (err) {
-      setReviewMessage(err.message || 'Failed to submit review.');
-    } finally {
-      setReviewSubmitting(false);
-    }
-  };
 
-=======
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
   const isSoldOut = product.isSoldOut || product.quantity === 0;
   const fmt = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2 });
 
@@ -448,16 +415,12 @@ export default function ProductDetail() {
                       {new Date(r.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
-<<<<<<< HEAD
                   {r.comment ? (
                     <p className="text-sm text-primary leading-relaxed mb-2">{r.comment}</p>
                   ) : r.comment_pending ? (
                     <p className="text-sm italic text-outline leading-relaxed mb-2">Comment awaiting approval</p>
                   ) : null}
                   <p className="text-[10px] uppercase tracking-widest text-outline">{r.user_name}</p>
-=======
-                  {r.comment && <p className="text-sm text-outline font-light leading-relaxed">{r.comment}</p>}
->>>>>>> 6de41418397e2738934e6f6fd11f91f35cdacc50
                 </div>
               ))}
             </div>
