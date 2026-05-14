@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle, XCircle, Star, Clock,
-  AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw,
+  AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw, MapPin,
 } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -45,6 +45,12 @@ export default function AdminPanel() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [statusLoading, setStatusLoading] = useState(null);
+
+  /* ── Deliveries state (Req 12) ── */
+  const [deliveries, setDeliveries] = useState([]);
+  const [delLoading, setDelLoading] = useState(true);
+  const [delError, setDelError] = useState('');
+  const [delActionLoading, setDelActionLoading] = useState(null);
 
   /* ── Toast ── */
   const [toast, setToast] = useState(null);
@@ -96,13 +102,30 @@ export default function AdminPanel() {
     }
   };
 
-  useEffect(() => { fetchReviews(); fetchOrders(); }, []);
+  /* ── Fetch delivery list ── */
+  const fetchDeliveries = async () => {
+    setDelLoading(true);
+    setDelError('');
+    try {
+      const res = await authFetch('http://localhost:3000/api/orders/admin/deliveries');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      setDeliveries(data.deliveries ?? []);
+    } catch (err) {
+      setDelError(err.message);
+    } finally {
+      setDelLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchReviews(); fetchOrders(); fetchDeliveries(); }, []);
 
   // Refetch when the browser tab regains focus (no polling timer).
   useEffect(() => {
     const onFocus = () => {
-      if (tab === 'comments') fetchReviews();
-      if (tab === 'orders')   fetchOrders();
+      if (tab === 'comments')   fetchReviews();
+      if (tab === 'orders')     fetchOrders();
+      if (tab === 'deliveries') fetchDeliveries();
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -111,9 +134,45 @@ export default function AdminPanel() {
   // Refetch whenever the user switches to a tab so it always reflects the
   // latest server state.
   useEffect(() => {
-    if (tab === 'comments') fetchReviews();
-    if (tab === 'orders')   fetchOrders();
+    if (tab === 'comments')   fetchReviews();
+    if (tab === 'orders')     fetchOrders();
+    if (tab === 'deliveries') fetchDeliveries();
   }, [tab]);
+
+  /* ── Mark delivery completed (transitions through shipped if needed) ── */
+  const markDeliveryCompleted = async (delivery) => {
+    setDelActionLoading(delivery.delivery_id);
+    try {
+      // Status state machine only allows processing→shipped→delivered, so step
+      // through 'shipped' first if necessary.
+      if (delivery.status === 'processing') {
+        const r1 = await authFetch(`http://localhost:3000/api/orders/${delivery.delivery_id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'shipped' }),
+        });
+        if (!r1.ok) {
+          const d = await r1.json();
+          throw new Error(d.error || 'Failed to ship');
+        }
+      }
+      const r2 = await authFetch(`http://localhost:3000/api/orders/${delivery.delivery_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'delivered' }),
+      });
+      if (!r2.ok) {
+        const d = await r2.json();
+        throw new Error(d.error || 'Failed to mark delivered');
+      }
+      await fetchDeliveries();
+      showToast('approve', `Delivery #${delivery.delivery_id} completed`);
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setDelActionLoading(null);
+    }
+  };
 
   /* ── Review actions ── */
   const handleReviewAction = async (id, action) => {
@@ -184,6 +243,7 @@ export default function AdminPanel() {
           {[
             { key: 'comments', label: `Comments (${reviews.length} pending)` },
             { key: 'orders',   label: `Orders (${orders.length})` },
+            { key: 'deliveries', label: `Deliveries (${deliveries.filter(d => !d.completed).length} open)` },
             { key: 'stock',    label: 'Stock' },
           ].map(t => (
             <button
@@ -341,6 +401,101 @@ export default function AdminPanel() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── DELIVERIES TAB (Req 12) ── */}
+        {tab === 'deliveries' && (
+          <>
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={fetchDeliveries}
+                disabled={delLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${delLoading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
+                Refresh
+              </button>
+            </div>
+            {delError && (
+              <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border border-red-200 mb-8">
+                <AlertTriangle className="w-4 h-4 text-red-500" strokeWidth={1.5} />
+                <p className="text-sm text-red-600">{delError}</p>
+              </div>
+            )}
+            {delLoading ? (
+              <p className="text-outline text-xs uppercase tracking-widest animate-pulse py-24 text-center">Loading deliveries...</p>
+            ) : deliveries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <Truck className="w-12 h-12 text-outline" strokeWidth={1} />
+                <p className="text-sm text-outline uppercase tracking-widest">No deliveries</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-outline-variant">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-container-high">
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-outline">
+                      <th className="px-4 py-3 font-bold">Delivery ID</th>
+                      <th className="px-4 py-3 font-bold">Customer</th>
+                      <th className="px-4 py-3 font-bold">Product</th>
+                      <th className="px-4 py-3 font-bold">Qty</th>
+                      <th className="px-4 py-3 font-bold">Total</th>
+                      <th className="px-4 py-3 font-bold">Address</th>
+                      <th className="px-4 py-3 font-bold">Completed</th>
+                      <th className="px-4 py-3 font-bold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deliveries.map(d => (
+                      <tr key={d.delivery_id} className="border-t border-outline-variant hover:bg-surface-container-low">
+                        <td className="px-4 py-3 font-bold text-primary">#{d.delivery_id}</td>
+                        <td className="px-4 py-3 text-primary">
+                          <div>{d.customer_name}</div>
+                          <div className="text-[10px] text-outline truncate max-w-[140px]">{d.customer_id}</div>
+                        </td>
+                        <td className="px-4 py-3 text-primary">
+                          <div>{d.product_name}</div>
+                          <div className="text-[10px] text-outline">PID {d.product_id}</div>
+                        </td>
+                        <td className="px-4 py-3 text-primary">{d.quantity}</td>
+                        <td className="px-4 py-3 text-primary">${fmt(d.total_price)}</td>
+                        <td className="px-4 py-3 text-primary max-w-[220px]">
+                          <div className="flex items-start gap-1.5">
+                            <MapPin className="w-3 h-3 mt-0.5 flex-none text-outline" strokeWidth={1.5} />
+                            <span className="truncate" title={d.delivery_address}>{d.delivery_address}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {d.completed
+                            ? <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] uppercase tracking-widest font-bold">
+                                <CheckCircle className="w-3 h-3" strokeWidth={2} /> Yes
+                              </span>
+                            : <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] uppercase tracking-widest font-bold">
+                                <Clock className="w-3 h-3" strokeWidth={2} /> No
+                              </span>
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {!d.completed && (
+                            <button
+                              onClick={() => markDeliveryCompleted(d)}
+                              disabled={delActionLoading === d.delivery_id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 disabled:opacity-50"
+                            >
+                              {delActionLoading === d.delivery_id
+                                ? <Clock className="w-3 h-3 animate-spin" strokeWidth={2} />
+                                : <Truck className="w-3 h-3" strokeWidth={2} />
+                              }
+                              Mark Completed
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </>

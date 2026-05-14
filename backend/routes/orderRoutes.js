@@ -133,6 +133,105 @@ router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res)
   }
 });
 
+// GET /api/orders/admin/deliveries — Req 12 delivery list
+// Shape per spec: delivery_id, customer_id, product_id, quantity, total_price,
+// delivery_address, completed (true once status='delivered').
+router.get('/admin/deliveries', authMiddleware, requireRole('admin'), async (_req, res) => {
+  try {
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('id, user_id, product_id, quantity, total_price, shipping_address, status, created_at, products(name)')
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Join customer name from profiles (separate call — RLS is service-role here)
+    const userIds = [...new Set((orders || []).map(o => o.user_id).filter(Boolean))];
+    let nameById = {};
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, home_address')
+        .in('id', userIds);
+      nameById = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+    }
+
+    const deliveries = (orders || []).map(o => ({
+      delivery_id:      o.id,
+      customer_id:      o.user_id,
+      customer_name:    nameById[o.user_id]?.name || 'Anonymous',
+      product_id:       o.product_id,
+      product_name:     o.products?.name || '—',
+      quantity:         o.quantity,
+      total_price:      o.total_price,
+      delivery_address: o.shipping_address || nameById[o.user_id]?.home_address || '—',
+      completed:        o.status === 'delivered',
+      status:           o.status,
+      created_at:       o.created_at,
+    }));
+
+    res.json({ deliveries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/orders/:id/cancel — Req 13 customer cancel
+// Allowed only while the order is still 'processing'. Restores stock.
+router.post('/:id/cancel', authMiddleware, async (req, res) => {
+  const orderId = req.params.id;
+  try {
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('id, status, user_id, product_id, quantity')
+      .eq('id', orderId)
+      .single();
+
+    if (fetchError || !order) return res.status(404).json({ error: 'Order not found' });
+    if (order.user_id !== req.user.id)
+      return res.status(403).json({ error: 'Not your order' });
+    if (order.status !== 'processing')
+      return res.status(400).json({ error: `Cannot cancel an order that is ${order.status}` });
+
+    // Flip status first so it can't be cancelled twice in a race
+    const { error: updErr } = await supabase
+      .from('orders')
+      .update({ status: 'cancelled' })
+      .eq('id', orderId)
+      .eq('status', 'processing');
+    if (updErr) throw updErr;
+
+    // Restore stock
+    const { data: product } = await supabase
+      .from('products')
+      .select('quantity')
+      .eq('id', order.product_id)
+      .single();
+    if (product) {
+      await supabase
+        .from('products')
+        .update({ quantity: (product.quantity || 0) + order.quantity })
+        .eq('id', order.product_id);
+    }
+
+    // Recompute popularity (non-cancelled order count × 10) to match POST /
+    const { data: orderStats } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('product_id', order.product_id)
+      .neq('status', 'cancelled');
+    await supabase
+      .from('products')
+      .update({ popularity: (orderStats?.length ?? 0) * 10 })
+      .eq('id', order.product_id);
+
+    res.json({ message: 'Order cancelled', order_id: order.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── NEW: Update order status ──
 // PATCH /api/orders/:id/status
 // Body: { "status": "shipped" } or { "status": "in-transit" } (alias)

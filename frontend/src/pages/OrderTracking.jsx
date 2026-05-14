@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { authFetch } from '../lib/authFetch';
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 
@@ -67,6 +67,23 @@ function OrderCard({ order, onRefresh }) {
   const uiStatus = normalizeOrderStatus(order.status);
   const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
   const raw = order.status || 'processing';
+
+  const cancelOrder = async () => {
+    if (!window.confirm('Cancel this order? Stock will be returned.')) return;
+    setUpdating(true);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/cancel`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Cancel failed');
+      await onRefresh?.();
+    } catch (e) {
+      alert(e.message || 'Could not cancel order');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const patchStatus = async (nextStatus) => {
     setUpdating(true);
@@ -178,6 +195,18 @@ function OrderCard({ order, onRefresh }) {
                   className="px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold bg-secondary-container text-on-secondary-container hover:brightness-95 disabled:opacity-50"
                 >
                   {updating ? 'Updating…' : 'Mark as delivered'}
+                </button>
+              )}
+              {/* Customer cancel — Req 13 */}
+              {raw === 'processing' && (
+                <button
+                  type="button"
+                  disabled={updating}
+                  onClick={e => { e.stopPropagation(); cancelOrder(); }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <XCircle className="w-3.5 h-3.5" strokeWidth={2} />
+                  {updating ? 'Cancelling…' : 'Cancel order'}
                 </button>
               )}
             </div>
