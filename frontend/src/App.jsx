@@ -13,24 +13,30 @@ import Favorites from './pages/Favorites';
 import Contact from './pages/Contact';
 import AdminPanel from './pages/AdminPanel';
 import RequireAuth from './components/RequireAuth';
+import BlockAdmin from './components/BlockAdmin';
 
 function App() {
   return (
     <div className="app-container">
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/collections" element={<Collections />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
-        <Route path="/product/:id" element={<ProductDetail />} />
-        <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
-        <Route path="/my-orders" element={<OrderTracking />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/search" element={<Search />} />
-        <Route path="/favorites" element={<Favorites />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/admin" element={<AdminPanel />} />
+        {/* Customer storefront — admins are redirected to /admin */}
+        <Route path="/"                          element={<BlockAdmin><Home /></BlockAdmin>} />
+        <Route path="/collections"               element={<BlockAdmin><Collections /></BlockAdmin>} />
+        <Route path="/checkout"                  element={<BlockAdmin><RequireAuth><Checkout /></RequireAuth></BlockAdmin>} />
+        <Route path="/product/:id"               element={<BlockAdmin><ProductDetail /></BlockAdmin>} />
+        <Route path="/order-confirmation/:orderId" element={<BlockAdmin><OrderConfirmation /></BlockAdmin>} />
+        <Route path="/my-orders"                 element={<BlockAdmin><OrderTracking /></BlockAdmin>} />
+        <Route path="/about"                     element={<BlockAdmin><About /></BlockAdmin>} />
+        <Route path="/search"                    element={<BlockAdmin><Search /></BlockAdmin>} />
+        <Route path="/favorites"                 element={<BlockAdmin><Favorites /></BlockAdmin>} />
+        <Route path="/contact"                   element={<BlockAdmin><Contact /></BlockAdmin>} />
+
+        {/* Auth pages — open to everyone */}
+        <Route path="/login"                     element={<Login />} />
+        <Route path="/signup"                    element={<Signup />} />
+
+        {/* Admin */}
+        <Route path="/admin"                     element={<AdminPanel />} />
       </Routes>
     </div>
   );

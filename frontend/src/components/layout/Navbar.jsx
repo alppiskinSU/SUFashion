@@ -20,6 +20,8 @@ export default function Navbar() {
     }
   }, [location]);
 
+  const isAdmin = user?.role === 'admin';
+
   const handleSignOut = () => {
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('refreshToken');
@@ -34,44 +36,51 @@ export default function Navbar() {
     <>
       <nav className="fixed top-0 w-full z-50 bg-surface-container/70 backdrop-blur-xl flex justify-between items-center px-8 py-6 max-w-full glass-panel">
         <div className="flex items-center gap-12">
-          <Link to="/" className="flex items-center">
+          <Link to={isAdmin ? '/admin' : '/'} className="flex items-center">
             <img src="/sufashion-logo-w.svg" alt="SUFashion Logo" className="h-10 md:h-12 w-auto object-contain scale-[1.5] origin-left" />
           </Link>
           <div className="hidden md:flex gap-8 items-center text-xs uppercase tracking-widest font-medium font-sans mt-1">
-            <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
-            <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
-            <Link to="/about" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/about' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>About</Link>
-            <Link to="/contact" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/contact' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Contact</Link>
-            {user?.role === 'admin' && (
-              <Link to="/admin" className={`pb-1 border-b-2 transition-colors flex items-center gap-1.5 ${location.pathname.startsWith('/admin') ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>
+            {isAdmin ? (
+              <Link to="/admin" className="pb-1 border-b-2 border-primary text-primary flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5" strokeWidth={1.5} />
-                Admin
+                Admin Panel
               </Link>
+            ) : (
+              <>
+                <Link to="/" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>New Arrivals</Link>
+                <Link to="/collections" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/collections' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Collections</Link>
+                <Link to="/about" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/about' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>About</Link>
+                <Link to="/contact" className={`pb-1 border-b-2 transition-colors ${location.pathname === '/contact' ? 'text-primary border-primary' : 'text-outline border-transparent hover:text-primary'}`}>Contact</Link>
+              </>
             )}
           </div>
         </div>
         <div className="flex items-center gap-6 text-primary">
-          <button
-            onClick={() => navigate('/search')}
-            className="hover:opacity-80 transition-opacity flex items-center justify-center"
-          >
-            <Search className="w-[22px] h-[22px]" strokeWidth={1} />
-          </button>
-          <button
-            onClick={() => navigate('/favorites')}
-            className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
-          >
-            <Heart className="w-[22px] h-[22px]" strokeWidth={1} />
-          </button>
-          <button 
-            className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
-            onClick={() => setIsCartOpen(true)}
-          >
-            <ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1} />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-secondary w-4 h-4 text-[10px] flex items-center justify-center text-on-secondary-container font-bold rounded-none">{cartCount}</span>
-            )}
-          </button>
+          {!isAdmin && (
+            <>
+              <button
+                onClick={() => navigate('/search')}
+                className="hover:opacity-80 transition-opacity flex items-center justify-center"
+              >
+                <Search className="w-[22px] h-[22px]" strokeWidth={1} />
+              </button>
+              <button
+                onClick={() => navigate('/favorites')}
+                className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
+              >
+                <Heart className="w-[22px] h-[22px]" strokeWidth={1} />
+              </button>
+              <button
+                className="hover:opacity-80 transition-opacity relative flex items-center justify-center"
+                onClick={() => setIsCartOpen(true)}
+              >
+                <ShoppingBag className="w-[22px] h-[22px]" strokeWidth={1} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-secondary w-4 h-4 text-[10px] flex items-center justify-center text-on-secondary-container font-bold rounded-none">{cartCount}</span>
+                )}
+              </button>
+            </>
+          )}
           <div className="relative group">
             <button className="hover:opacity-80 transition-opacity flex items-center justify-center gap-2">
               <User className="w-[22px] h-[22px]" strokeWidth={1} />
@@ -86,16 +95,17 @@ export default function Navbar() {
                     <p className="text-[10px] uppercase tracking-widest text-outline">Signed in as</p>
                     <p className="text-[11px] font-bold text-primary truncate mt-0.5">{user.name || user.email}</p>
                   </div>
-                  {user.role === 'admin' && (
+                  {isAdmin ? (
                     <Link to="/admin" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
                       <Shield className="w-3.5 h-3.5" strokeWidth={1.5} />
                       Admin Panel
                     </Link>
+                  ) : (
+                    <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                      <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      My Orders
+                    </Link>
                   )}
-                  <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
-                    <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
-                    My Orders
-                  </Link>
                   <button
                     onClick={handleSignOut}
                     className="w-full text-left flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors"
