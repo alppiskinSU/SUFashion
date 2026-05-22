@@ -19,11 +19,11 @@ export default function RequireAdmin({ children }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // Token present but user is not an admin → kick to customer homepage
+  // Token present but user is not an admin or sales_manager → kick to customer homepage
   try {
     const raw = sessionStorage.getItem('user');
     const user = raw ? JSON.parse(raw) : null;
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'sales_manager')) {
       return <Navigate to="/" replace />;
     }
   } catch {

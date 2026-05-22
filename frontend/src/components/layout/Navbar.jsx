@@ -20,7 +20,7 @@ export default function Navbar() {
     }
   }, [location]);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'sales_manager';
 
   const handleSignOut = () => {
     sessionStorage.removeItem('token');
@@ -101,10 +101,16 @@ export default function Navbar() {
                       Admin Panel
                     </Link>
                   ) : (
-                    <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
-                      <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
-                      My Orders
-                    </Link>
+                    <>
+                      <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                        <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        My Orders
+                      </Link>
+                      <Link to="/refunds" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                        <ShoppingBag className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        Refund Requests
+                      </Link>
+                    </>
                   )}
                   <button
                     onClick={handleSignOut}

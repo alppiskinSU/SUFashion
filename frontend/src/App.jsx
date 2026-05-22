@@ -12,6 +12,7 @@ import Search from './pages/Search';
 import Favorites from './pages/Favorites';
 import Contact from './pages/Contact';
 import AdminPanel from './pages/AdminPanel';
+import ReturnRefund from './pages/ReturnRefund';
 import RequireAuth from './components/RequireAuth';
 import BlockAdmin from './components/BlockAdmin';
 import RequireAdmin from './components/RequireAdmin';
@@ -27,6 +28,7 @@ function App() {
         <Route path="/product/:id"               element={<BlockAdmin><ProductDetail /></BlockAdmin>} />
         <Route path="/order-confirmation/:orderId" element={<BlockAdmin><OrderConfirmation /></BlockAdmin>} />
         <Route path="/my-orders"                 element={<BlockAdmin><OrderTracking /></BlockAdmin>} />
+        <Route path="/refunds"                   element={<BlockAdmin><RequireAuth><ReturnRefund /></RequireAuth></BlockAdmin>} />
         <Route path="/about"                     element={<BlockAdmin><About /></BlockAdmin>} />
         <Route path="/search"                    element={<BlockAdmin><Search /></BlockAdmin>} />
         <Route path="/favorites"                 element={<BlockAdmin><Favorites /></BlockAdmin>} />

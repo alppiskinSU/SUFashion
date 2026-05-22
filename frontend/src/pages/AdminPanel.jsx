@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle, XCircle, Star, Clock,
   AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw, MapPin,
-  FileText,
+  FileText, BarChart3, DollarSign, TrendingUp, RotateCcw,
 } from 'lucide-react';
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { authFetch } from '../lib/authFetch';
@@ -33,7 +37,7 @@ const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('comments');
+  const [tab, setTab] = useState('dashboard');
 
   /* ── Reviews state ── */
   const [reviews, setReviews] = useState([]);
@@ -61,6 +65,20 @@ export default function AdminPanel() {
   const [invFrom,        setInvFrom]        = useState('');
   const [invTo,          setInvTo]          = useState('');
 
+  /* ── Refunds state (SCRUM-113) ── */
+  const [refunds,        setRefunds]        = useState([]);
+  const [refLoading,     setRefLoading]     = useState(true);
+  const [refError,       setRefError]       = useState('');
+  const [refActionLoading, setRefActionLoading] = useState(null);
+
+  /* ── Dashboard / Revenue chart state (SCRUM-114) ── */
+  const [dashFrom,       setDashFrom]       = useState('');
+  const [dashTo,         setDashTo]         = useState('');
+  const [dashSummary,    setDashSummary]    = useState(null);
+  const [dashChart,      setDashChart]      = useState([]);
+  const [dashLoading,    setDashLoading]    = useState(false);
+  const [dashError,      setDashError]      = useState('');
+
   /* ── Toast ── */
   const [toast, setToast] = useState(null);
 
@@ -75,7 +93,7 @@ export default function AdminPanel() {
     if (!stored) { navigate('/login'); return; }
     try {
       const user = JSON.parse(stored);
-      if (user.role !== 'admin') { navigate('/'); return; }
+      if (user.role !== 'admin' && user.role !== 'sales_manager') { navigate('/'); return; }
     } catch { navigate('/login'); }
   }, [navigate]);
 
@@ -154,7 +172,77 @@ export default function AdminPanel() {
     }
   };
 
-  useEffect(() => { fetchReviews(); fetchOrders(); fetchDeliveries(); }, []);
+  /* ── Fetch all refund requests (SCRUM-113) ── */
+  const fetchRefunds = async () => {
+    setRefLoading(true);
+    setRefError('');
+    try {
+      const res = await authFetch('http://localhost:3000/api/refunds/admin/all');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load refunds');
+      setRefunds(data.refunds ?? []);
+    } catch (err) {
+      setRefError(err.message);
+    } finally {
+      setRefLoading(false);
+    }
+  };
+
+  /* ── Refund approve / reject action (SCRUM-113) ── */
+  const handleRefundAction = async (refundId, newStatus) => {
+    setRefActionLoading(refundId);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/refunds/${refundId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Action failed');
+      setRefunds(prev => prev.map(r => r.id === refundId ? { ...r, status: newStatus } : r));
+      showToast(newStatus === 'approved' ? 'approve' : 'reject',
+        `Refund #${refundId} ${newStatus}`);
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setRefActionLoading(null);
+    }
+  };
+
+  /* ── Fetch dashboard data (SCRUM-114) ── */
+  const fetchDashboard = async () => {
+    if (!dashFrom || !dashTo) {
+      setDashError('Please select both a start and end date.');
+      return;
+    }
+    setDashLoading(true);
+    setDashError('');
+    setDashSummary(null);
+    setDashChart([]);
+    try {
+      const params = new URLSearchParams({ from: dashFrom, to: dashTo });
+
+      const [resSummary, resChart] = await Promise.all([
+        authFetch(`http://localhost:3000/api/invoices/admin/revenue-summary?${params}`),
+        authFetch(`http://localhost:3000/api/invoices/admin/revenue-chart?${params}`),
+      ]);
+
+      const dataSummary = await resSummary.json();
+      const dataChart   = await resChart.json();
+
+      if (!resSummary.ok) throw new Error(dataSummary.error || 'Failed to load summary');
+      if (!resChart.ok)   throw new Error(dataChart.error || 'Failed to load chart data');
+
+      setDashSummary(dataSummary.summary);
+      setDashChart(dataChart.chartData ?? []);
+    } catch (err) {
+      setDashError(err.message);
+    } finally {
+      setDashLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchReviews(); fetchOrders(); fetchDeliveries(); fetchRefunds(); }, []);
 
   // Refetch when the browser tab regains focus (no polling timer).
   useEffect(() => {
@@ -162,6 +250,7 @@ export default function AdminPanel() {
       if (tab === 'comments')   fetchReviews();
       if (tab === 'orders')     fetchOrders();
       if (tab === 'deliveries') fetchDeliveries();
+      if (tab === 'refunds')    fetchRefunds();
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -173,6 +262,7 @@ export default function AdminPanel() {
     if (tab === 'comments')   fetchReviews();
     if (tab === 'orders')     fetchOrders();
     if (tab === 'deliveries') fetchDeliveries();
+    if (tab === 'refunds')    fetchRefunds();
   }, [tab]);
 
   /* ── Mark delivery completed (transitions through shipped if needed) ── */
@@ -277,9 +367,11 @@ export default function AdminPanel() {
         {/* Tabs */}
         <div className="flex gap-0 border-b border-outline-variant mb-10">
           {[
+            { key: 'dashboard', label: 'Dashboard' },
             { key: 'comments',  label: `Comments (${reviews.length} pending)` },
             { key: 'orders',   label: `Orders (${orders.length})` },
             { key: 'deliveries', label: `Deliveries (${deliveries.filter(d => !d.completed).length} open)` },
+            { key: 'refunds',  label: `Refunds (${refunds.filter(r => r.status === 'pending').length} pending)` },
             { key: 'stock',    label: 'Stock' },
             { key: 'invoices', label: 'Invoices' },
           ].map(t => (
@@ -296,6 +388,150 @@ export default function AdminPanel() {
             </button>
           ))}
         </div>
+
+        {/* ── DASHBOARD TAB (SCRUM-114) ── */}
+        {tab === 'dashboard' && (
+          <>
+            {/* Date range picker */}
+            <div className="flex flex-wrap items-end gap-4 mb-8 p-6 bg-surface-container border border-outline-variant">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-widest text-outline font-bold" htmlFor="dash-from">From</label>
+                <input
+                  id="dash-from"
+                  type="date"
+                  value={dashFrom}
+                  onChange={e => setDashFrom(e.target.value)}
+                  className="px-3 py-2 border border-outline-variant bg-surface text-primary text-xs focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-widest text-outline font-bold" htmlFor="dash-to">To</label>
+                <input
+                  id="dash-to"
+                  type="date"
+                  value={dashTo}
+                  onChange={e => setDashTo(e.target.value)}
+                  className="px-3 py-2 border border-outline-variant bg-surface text-primary text-xs focus:outline-none focus:border-primary"
+                />
+              </div>
+              <button
+                onClick={fetchDashboard}
+                disabled={dashLoading}
+                className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+              >
+                <BarChart3 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                {dashLoading ? 'Loading…' : 'Generate Report'}
+              </button>
+            </div>
+
+            {/* Error */}
+            {dashError && (
+              <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border border-red-200 mb-6">
+                <AlertTriangle className="w-4 h-4 text-red-500" strokeWidth={1.5} />
+                <p className="text-sm text-red-600">{dashError}</p>
+              </div>
+            )}
+
+            {/* KPI Cards */}
+            {dashSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                {[
+                  { label: 'Total Orders',   value: dashSummary.total_orders,     icon: Package,     color: 'text-primary' },
+                  { label: 'Completed',       value: dashSummary.completed_orders, icon: CheckCircle, color: 'text-emerald-600' },
+                  { label: 'Cancelled',       value: dashSummary.cancelled_orders, icon: XCircle,     color: 'text-red-500' },
+                  { label: 'Gross Revenue',   value: `$${fmt(dashSummary.gross_revenue)}`,     icon: DollarSign,  color: 'text-emerald-600' },
+                  { label: 'Lost Revenue',    value: `$${fmt(dashSummary.cancelled_revenue)}`, icon: TrendingUp,  color: 'text-red-500' },
+                ].map(card => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={card.label} className="bg-surface-container border border-outline-variant p-5 flex flex-col gap-2 transition-all duration-300 hover:shadow-ghost">
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 ${card.color}`} strokeWidth={1.5} />
+                        <p className="text-[10px] uppercase tracking-widest text-outline">{card.label}</p>
+                      </div>
+                      <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Revenue Chart */}
+            {dashChart.length > 0 && (
+              <div className="bg-surface-container border border-outline-variant p-6 mb-8">
+                <div className="flex items-center gap-2 mb-6">
+                  <TrendingUp className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                  <h3 className="text-[11px] uppercase tracking-widest font-bold text-primary">Daily Revenue & Refunds</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={340}>
+                  <AreaChart data={dashChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2B2B2B" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#2B2B2B" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gradRefund" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#c4c7c7" strokeOpacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: '#747878', textTransform: 'uppercase' }}
+                      tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: '#747878' }} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#EDEAE9',
+                        border: '1px solid #c4c7c7',
+                        fontSize: 11,
+                        fontFamily: 'Outfit, sans-serif',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                      formatter={(value) => [`$${Number(value).toFixed(2)}`, undefined]}
+                      labelFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    />
+                    <Legend
+                      iconType="square"
+                      wrapperStyle={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="daily_revenue"
+                      name="Revenue"
+                      stroke="#2B2B2B"
+                      strokeWidth={2}
+                      fill="url(#gradRevenue)"
+                      dot={{ r: 3, fill: '#2B2B2B' }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="daily_refunds"
+                      name="Refunds"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      fill="url(#gradRefund)"
+                      dot={{ r: 3, fill: '#ef4444' }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!dashLoading && !dashSummary && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <BarChart3 className="w-12 h-12 text-outline" strokeWidth={1} />
+                <p className="text-sm text-outline uppercase tracking-widest">Select a date range and generate a report</p>
+              </div>
+            )}
+          </>
+        )}
 
         {/* ── COMMENTS TAB ── */}
         {tab === 'comments' && (
@@ -527,6 +763,98 @@ export default function AdminPanel() {
                               }
                               Mark Completed
                             </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── REFUNDS TAB (SCRUM-113) ── */}
+        {tab === 'refunds' && (
+          <>
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={fetchRefunds}
+                disabled={refLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refLoading ? 'animate-spin' : ''}`} strokeWidth={1.5} />
+                Refresh
+              </button>
+            </div>
+            {refError && (
+              <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border border-red-200 mb-8">
+                <AlertTriangle className="w-4 h-4 text-red-500" strokeWidth={1.5} />
+                <p className="text-sm text-red-600">{refError}</p>
+              </div>
+            )}
+            {refLoading ? (
+              <p className="text-outline text-xs uppercase tracking-widest animate-pulse py-24 text-center">Loading refund requests...</p>
+            ) : refunds.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <RotateCcw className="w-12 h-12 text-outline" strokeWidth={1} />
+                <p className="text-sm text-outline uppercase tracking-widest">No refund requests</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-outline-variant">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-container-high">
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-outline">
+                      <th className="px-4 py-3 font-bold">Refund ID</th>
+                      <th className="px-4 py-3 font-bold">Order ID</th>
+                      <th className="px-4 py-3 font-bold">Product</th>
+                      <th className="px-4 py-3 font-bold">Amount</th>
+                      <th className="px-4 py-3 font-bold">Reason</th>
+                      <th className="px-4 py-3 font-bold">Date</th>
+                      <th className="px-4 py-3 font-bold">Status</th>
+                      <th className="px-4 py-3 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refunds.map(refund => (
+                      <tr key={refund.id} className={`border-t border-outline-variant hover:bg-surface-container-low transition-colors ${refActionLoading === refund.id ? 'opacity-50' : ''}`}>
+                        <td className="px-4 py-3 font-bold text-primary">#{refund.id}</td>
+                        <td className="px-4 py-3 text-primary">#{refund.order_id}</td>
+                        <td className="px-4 py-3 text-primary">{refund.orders?.products?.name || '—'}</td>
+                        <td className="px-4 py-3 text-primary font-bold">${fmt(refund.amount)}</td>
+                        <td className="px-4 py-3 text-primary max-w-[200px]">
+                          <span className="truncate block" title={refund.reason}>{refund.reason || '—'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-primary whitespace-nowrap">{formatDate(refund.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-0.5 text-[10px] uppercase tracking-widest font-bold ${
+                            refund.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : refund.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200'
+                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          }`}>
+                            {refund.status === 'approved' ? 'Approved' : refund.status === 'rejected' ? 'Rejected' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {refund.status === 'pending' && (
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => handleRefundAction(refund.id, 'approved')}
+                                disabled={refActionLoading === refund.id}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                              >
+                                <CheckCircle className="w-3 h-3" strokeWidth={2} />
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleRefundAction(refund.id, 'rejected')}
+                                disabled={refActionLoading === refund.id}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
+                              >
+                                <XCircle className="w-3 h-3" strokeWidth={2} />
+                                Reject
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>

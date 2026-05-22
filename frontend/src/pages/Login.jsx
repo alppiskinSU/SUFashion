@@ -44,8 +44,8 @@ export default function Login() {
       sessionStorage.removeItem('postLoginRedirect');
       // Notify in-tab listeners (e.g. CartContext) that the active user changed
       window.dispatchEvent(new Event('auth-changed'));
-      // Admins go straight to the admin panel — they don't see the storefront
-      const target = data.user?.role === 'admin' ? '/admin' : redirectTo;
+      // Admins and sales managers go straight to the admin panel — they don't see the storefront
+      const target = (data.user?.role === 'admin' || data.user?.role === 'sales_manager') ? '/admin' : redirectTo;
       navigate(target, { replace: true });
     } catch {
       setError('Could not connect to server. Please try again.');

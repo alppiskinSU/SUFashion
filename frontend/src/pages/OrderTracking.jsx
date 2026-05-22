@@ -241,13 +241,21 @@ function OrderCard({ order, onRefresh }) {
           </div>
 
           {/* View invoice link */}
-          <div className="mt-8">
+          <div className="mt-8 flex items-center gap-6">
             <Link
               to={`/order-confirmation/${order.id}`}
               className="inline-flex items-center gap-2 text-[10px] uppercase tracking-widest text-outline hover:text-primary font-bold transition-colors"
             >
               View Invoice →
             </Link>
+            {uiStatus === 'delivered' && (
+              <Link
+                to="/refunds"
+                className="inline-flex items-center gap-2 text-[10px] uppercase tracking-widest text-outline hover:text-primary font-bold transition-colors"
+              >
+                Request Return / Refund →
+              </Link>
+            )}
           </div>
         </div>
       )}

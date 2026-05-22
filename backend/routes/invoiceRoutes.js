@@ -62,7 +62,7 @@ const { requireRole } = require('../middleware/authMiddleware');
  * Returns every order in [from, to] enriched with customer + product names.
  * Accessible to admin only.
  */
-router.get('/admin/by-date', authMiddleware, requireRole('admin'), async (req, res) => {
+router.get('/admin/by-date', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
     const { from, to } = req.query;
 
     if (!from || !to) {
@@ -131,7 +131,7 @@ router.get('/admin/by-date', authMiddleware, requireRole('admin'), async (req, r
  *
  * Returns aggregate revenue stats for the date range.
  */
-router.get('/admin/revenue-summary', authMiddleware, requireRole('admin'), async (req, res) => {
+router.get('/admin/revenue-summary', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
     const { from, to } = req.query;
 
     if (!from || !to) {
@@ -176,6 +176,36 @@ router.get('/admin/revenue-summary', authMiddleware, requireRole('admin'), async
             },
         });
 
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/invoices/admin/revenue-chart?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Returns daily aggregate revenue/refund records for the chart.
+ */
+router.get('/admin/revenue-chart', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+        return res.status(400).json({
+            error: 'Both "from" and "to" query parameters are required (YYYY-MM-DD).',
+        });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('revenue_tracking')
+            .select('*')
+            .gte('date', from)
+            .lte('date', to)
+            .order('date', { ascending: true });
+
+        if (error) return res.status(500).json({ error: error.message });
+
+        res.json({ chartData: data || [] });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

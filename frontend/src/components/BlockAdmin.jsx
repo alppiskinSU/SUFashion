@@ -10,7 +10,7 @@ export default function BlockAdmin({ children }) {
   if (!raw) return children; // not logged in → customer browsing is fine
   try {
     const user = JSON.parse(raw);
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'sales_manager') {
       return <Navigate to="/admin" replace />;
     }
   } catch {
