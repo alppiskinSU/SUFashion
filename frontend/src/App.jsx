@@ -14,6 +14,7 @@ import Contact from './pages/Contact';
 import AdminPanel from './pages/AdminPanel';
 import RequireAuth from './components/RequireAuth';
 import BlockAdmin from './components/BlockAdmin';
+import RequireAdmin from './components/RequireAdmin';
 
 function App() {
   return (
@@ -36,7 +37,7 @@ function App() {
         <Route path="/signup"                    element={<Signup />} />
 
         {/* Admin */}
-        <Route path="/admin"                     element={<AdminPanel />} />
+        <Route path="/admin"                     element={<RequireAdmin><AdminPanel /></RequireAdmin>} />
       </Routes>
     </div>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle, XCircle, Star, Clock,
   AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw, MapPin,
+  FileText,
 } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
@@ -51,6 +52,14 @@ export default function AdminPanel() {
   const [delLoading, setDelLoading] = useState(true);
   const [delError, setDelError] = useState('');
   const [delActionLoading, setDelActionLoading] = useState(null);
+
+  /* ── Invoices by date range state (SCRUM-110) ── */
+  const [invoices,       setInvoices]       = useState([]);
+  const [invoiceSummary, setInvoiceSummary] = useState(null);
+  const [invLoading,     setInvLoading]     = useState(false);
+  const [invError,       setInvError]       = useState('');
+  const [invFrom,        setInvFrom]        = useState('');
+  const [invTo,          setInvTo]          = useState('');
 
   /* ── Toast ── */
   const [toast, setToast] = useState(null);
@@ -115,6 +124,33 @@ export default function AdminPanel() {
       setDelError(err.message);
     } finally {
       setDelLoading(false);
+    }
+  };
+
+  /* ── Fetch invoices by date range (SCRUM-110) ── */
+  const fetchInvoices = async () => {
+    if (!invFrom || !invTo) {
+      setInvError('Please select both a start and end date.');
+      return;
+    }
+    setInvLoading(true);
+    setInvError('');
+    setInvoices([]);
+    setInvoiceSummary(null);
+    try {
+      const params = new URLSearchParams({ from: invFrom, to: invTo });
+      const resInv = await authFetch(`http://localhost:3000/api/invoices/admin/by-date?${params}`);
+      const dataInv = await resInv.json();
+      if (!resInv.ok) throw new Error(dataInv.error || 'Failed to load invoices');
+      setInvoices(dataInv.invoices ?? []);
+
+      const resSummary = await authFetch(`http://localhost:3000/api/invoices/admin/revenue-summary?${params}`);
+      const dataSummary = await resSummary.json();
+      if (resSummary.ok) setInvoiceSummary(dataSummary.summary);
+    } catch (err) {
+      setInvError(err.message);
+    } finally {
+      setInvLoading(false);
     }
   };
 
@@ -241,10 +277,11 @@ export default function AdminPanel() {
         {/* Tabs */}
         <div className="flex gap-0 border-b border-outline-variant mb-10">
           {[
-            { key: 'comments', label: `Comments (${reviews.length} pending)` },
+            { key: 'comments',  label: `Comments (${reviews.length} pending)` },
             { key: 'orders',   label: `Orders (${orders.length})` },
             { key: 'deliveries', label: `Deliveries (${deliveries.filter(d => !d.completed).length} open)` },
             { key: 'stock',    label: 'Stock' },
+            { key: 'invoices', label: 'Invoices' },
           ].map(t => (
             <button
               key={t.key}
@@ -504,6 +541,114 @@ export default function AdminPanel() {
         {/* ── STOCK TAB ── */}
         {tab === 'stock' && (
           <StockManager onToast={showToast} />
+        )}
+
+        {/* ── INVOICES TAB (SCRUM-110) ── */}
+        {tab === 'invoices' && (
+          <>
+            {/* Date range picker */}
+            <div className="flex flex-wrap items-end gap-4 mb-8 p-6 bg-surface-container border border-outline-variant">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-widest text-outline font-bold" htmlFor="inv-from">From</label>
+                <input
+                  id="inv-from"
+                  type="date"
+                  value={invFrom}
+                  onChange={e => setInvFrom(e.target.value)}
+                  className="px-3 py-2 border border-outline-variant bg-surface text-primary text-xs focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-widest text-outline font-bold" htmlFor="inv-to">To</label>
+                <input
+                  id="inv-to"
+                  type="date"
+                  value={invTo}
+                  onChange={e => setInvTo(e.target.value)}
+                  className="px-3 py-2 border border-outline-variant bg-surface text-primary text-xs focus:outline-none focus:border-primary"
+                />
+              </div>
+              <button
+                onClick={fetchInvoices}
+                disabled={invLoading}
+                className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+              >
+                <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />
+                {invLoading ? 'Loading…' : 'Search'}
+              </button>
+            </div>
+
+            {/* Error banner */}
+            {invError && (
+              <div className="flex items-center gap-3 px-6 py-4 bg-red-50 border border-red-200 mb-6">
+                <AlertTriangle className="w-4 h-4 text-red-500" strokeWidth={1.5} />
+                <p className="text-sm text-red-600">{invError}</p>
+              </div>
+            )}
+
+            {/* Revenue summary cards */}
+            {invoiceSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                {[
+                  { label: 'Total Orders',   value: invoiceSummary.total_orders },
+                  { label: 'Completed',       value: invoiceSummary.completed_orders },
+                  { label: 'Cancelled',       value: invoiceSummary.cancelled_orders },
+                  { label: 'Gross Revenue',   value: `$${fmt(invoiceSummary.gross_revenue)}` },
+                ].map(card => (
+                  <div key={card.label} className="bg-surface-container border border-outline-variant p-5">
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-1">{card.label}</p>
+                    <p className="text-xl font-bold text-primary">{card.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!invLoading && invoices.length === 0 && invoiceSummary === null && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <FileText className="w-12 h-12 text-outline" strokeWidth={1} />
+                <p className="text-sm text-outline uppercase tracking-widest">Select a date range and press Search</p>
+              </div>
+            )}
+
+            {/* Invoices table */}
+            {invoices.length > 0 && (
+              <div className="overflow-x-auto border border-outline-variant">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface-container-high">
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-outline">
+                      <th className="px-4 py-3 font-bold">Invoice ID</th>
+                      <th className="px-4 py-3 font-bold">Date</th>
+                      <th className="px-4 py-3 font-bold">Customer</th>
+                      <th className="px-4 py-3 font-bold">Product</th>
+                      <th className="px-4 py-3 font-bold">Qty</th>
+                      <th className="px-4 py-3 font-bold">Unit Price</th>
+                      <th className="px-4 py-3 font-bold">Total</th>
+                      <th className="px-4 py-3 font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map(inv => (
+                      <tr key={inv.invoice_id} className="border-t border-outline-variant hover:bg-surface-container-low">
+                        <td className="px-4 py-3 font-bold text-primary truncate max-w-[120px]">#{inv.invoice_id}</td>
+                        <td className="px-4 py-3 text-primary whitespace-nowrap">{formatDate(inv.created_at)}</td>
+                        <td className="px-4 py-3 text-primary">{inv.customer_name}</td>
+                        <td className="px-4 py-3 text-primary">{inv.product_name}</td>
+                        <td className="px-4 py-3 text-primary">{inv.quantity}</td>
+                        <td className="px-4 py-3 text-primary">{inv.unit_price != null ? `$${fmt(inv.unit_price)}` : '—'}</td>
+                        <td className="px-4 py-3 text-primary font-bold">${fmt(inv.total_price)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[inv.status] ?? STATUS_COLOR.processing}`}>
+                            {STATUS_LABEL[inv.status] ?? inv.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </main>
 
