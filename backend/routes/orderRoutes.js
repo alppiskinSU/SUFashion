@@ -195,9 +195,14 @@ router.post('/:id/cancel', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: `Cannot cancel an order that is ${order.status}` });
 
     // Flip status first so it can't be cancelled twice in a race
+    const { cancellation_reason } = req.body;
     const { error: updErr } = await supabase
       .from('orders')
-      .update({ status: 'cancelled' })
+      .update({
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: cancellation_reason || null,
+      })
       .eq('id', orderId)
       .eq('status', 'processing');
     if (updErr) throw updErr;
