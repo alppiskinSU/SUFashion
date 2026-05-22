@@ -20,15 +20,23 @@ export default function RequireAdmin({ children }) {
   }
 
   // Token present but user is not an admin or sales_manager → kick to customer homepage
+  let isAuthorized = false;
+  let isMalformed = false;
   try {
     const raw = sessionStorage.getItem('user');
     const user = raw ? JSON.parse(raw) : null;
-    if (!user || (user.role !== 'admin' && user.role !== 'sales_manager')) {
-      return <Navigate to="/" replace />;
+    if (user && (user.role === 'admin' || user.role === 'sales_manager')) {
+      isAuthorized = true;
     }
   } catch {
-    // Malformed user payload — treat as unauthenticated
+    isMalformed = true;
+  }
+
+  if (isMalformed) {
     return <Navigate to="/login" replace />;
+  }
+  if (!isAuthorized) {
+    return <Navigate to="/" replace />;
   }
 
   return children;

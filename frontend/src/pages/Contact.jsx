@@ -4,7 +4,8 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Button from '../components/ui/Button';
 
-function ContactInfoCard({ icon: Icon, title, lines }) {
+function ContactInfoCard({ icon, title, lines }) {
+  const Icon = icon;
   return (
     <div className="group p-8 md:p-10 border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all duration-700 cursor-default">
       <div className="text-primary mb-8">

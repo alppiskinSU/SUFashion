@@ -8,6 +8,15 @@ import GallerySection from '../components/home/GallerySection';
 import EditorialSection from '../components/home/EditorialSection';
 import { supabase } from '../lib/supabase';
 
+// Helper to match components' expected data structure
+const mapProductData = (p) => ({
+  ...p,
+  image: p.image_url,
+  isSoldOut: p.quantity === 0,
+  isLimited: p.is_limited,
+  oldPrice: p.old_price,
+});
+
 export default function Home() {
   const [products, setProducts] = useState([]);
 
@@ -37,15 +46,6 @@ export default function Home() {
       supabase.removeChannel(channel);
     };
   }, []);
-
-  // Helper to match components' expected data structure
-  const mapProductData = (p) => ({
-    ...p,
-    image: p.image_url,
-    isSoldOut: p.quantity === 0,
-    isLimited: p.is_limited,
-    oldPrice: p.old_price,
-  });
 
   return (
     <>

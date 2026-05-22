@@ -15,7 +15,8 @@ function Stat({ value, label }) {
 }
 
 /* ── Value Pillar Card ── */
-function ValueCard({ icon: Icon, title, description }) {
+function ValueCard({ icon, title, description }) {
+  const Icon = icon;
   return (
     <div className="group p-8 md:p-10 border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all duration-700 cursor-default">
       <Icon className="w-7 h-7 text-primary mb-8" strokeWidth={1} />
