@@ -20,9 +20,13 @@ CREATE TABLE IF NOT EXISTS public.orders (
     shipping_address TEXT,
     payment_method   TEXT            DEFAULT 'card'
                         CHECK (payment_method IN ('card', 'store_credit', 'cash_on_delivery')),
-    invoice_id       BIGINT          REFERENCES public.invoices(id) ON DELETE SET NULL,
+    invoice_id           BIGINT          REFERENCES public.invoices(id) ON DELETE SET NULL,
 
-    created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    -- Cancellation tracking (Req 12)
+    cancelled_at         TIMESTAMPTZ,
+    cancellation_reason  TEXT,
+
+    created_at           TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
 -- ── If the table already exists, add new columns safely ───────────────────────
@@ -40,6 +44,12 @@ ALTER TABLE public.orders
 
 ALTER TABLE public.orders
     ADD COLUMN IF NOT EXISTS invoice_id       BIGINT REFERENCES public.invoices(id) ON DELETE SET NULL;
+
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS cancelled_at        TIMESTAMPTZ;
+
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
 
 -- ── Row Level Security ────────────────────────────────────────────────────────
 

@@ -20,8 +20,13 @@ CREATE TABLE IF NOT EXISTS public.products (
     warranty_status  TEXT,
     distributor_info TEXT,
     popularity       INTEGER NOT NULL DEFAULT 0,
+    returns          INTEGER NOT NULL DEFAULT 0,   -- total units returned via approved refunds
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Return stock tracking (Req 13)
+ALTER TABLE public.products
+    ADD COLUMN IF NOT EXISTS returns INTEGER NOT NULL DEFAULT 0;
 
 -- Enable Row Level Security
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
