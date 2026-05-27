@@ -8,10 +8,11 @@ const API_BASE = 'http://localhost:3000';
  * the order confirmation page.
  *
  * @param {Array<{id:any, product_id?:any, quantity:number}>} cartItems
+ * @param {{ firstName, lastName, address, city, zip, country }} [shippingInfo]
  * @returns {Promise<{ orderId: string|null }>}
  *   Resolves with the last created order id. Throws on failure.
  */
-export async function placeOrder(cartItems) {
+export async function placeOrder(cartItems, shippingInfo = {}) {
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
     throw new Error('Your bag is empty.');
   }
@@ -21,6 +22,14 @@ export async function placeOrder(cartItems) {
     throw err;
   }
 
+  const { firstName, lastName, address, city, zip, country } = shippingInfo;
+  const shipping_address = [
+    firstName && lastName ? `${firstName} ${lastName}` : '',
+    address,
+    city && zip ? `${city} ${zip}` : city || zip || '',
+    country,
+  ].filter(Boolean).join(', ') || null;
+
   let lastOrderId = null;
   for (const item of cartItems) {
     const productId = item.product_id ?? item.id;
@@ -29,7 +38,7 @@ export async function placeOrder(cartItems) {
     const res = await authFetch(`${API_BASE}/api/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, quantity }),
+      body: JSON.stringify({ product_id: productId, quantity, shipping_address }),
     });
 
     let data = {};

@@ -9,10 +9,10 @@ const { sendInvoiceEmail } = require('../utils/emailService');
 router.post('/send/:orderId', authMiddleware, async (req, res) => {
     try {
         const orderId = req.params.orderId;
-        const userEmail = req.user.email; // Filled by authMiddleware
+        const userEmail = req.body?.email || req.user.email; // Use provided email or fall back to account email
 
         if (!userEmail) {
-            return res.status(400).json({ error: 'No email address found registered to this account.' });
+            return res.status(400).json({ error: 'No email address found. Please provide an email address.' });
         }
 
         // Fetch order details + joined product details

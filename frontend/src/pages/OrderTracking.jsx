@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { authFetch } from '../lib/authFetch';
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, XCircle, RefreshCw } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 
@@ -85,24 +85,6 @@ function OrderCard({ order, onRefresh }) {
     }
   };
 
-  const patchStatus = async (nextStatus) => {
-    setUpdating(true);
-    try {
-      const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Update failed');
-      await onRefresh?.();
-    } catch (e) {
-      alert(e.message || 'Could not update status');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   return (
     <div className="bg-surface-container-low">
 
@@ -174,41 +156,18 @@ function OrderCard({ order, onRefresh }) {
             <StatusTimeline currentStatus={order.status} />
           )}
 
-          {/* Demo: advance delivery status (backend PATCH) */}
-          {order.status !== 'cancelled' && (
+          {/* Customer cancel — Req 13 */}
+          {raw === 'processing' && (
             <div className="mt-8 flex flex-wrap gap-3">
-              {raw === 'processing' && (
-                <button
-                  type="button"
-                  disabled={updating}
-                  onClick={e => { e.stopPropagation(); patchStatus('in-transit'); }}
-                  className="px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold bg-primary text-white hover:brightness-95 disabled:opacity-50"
-                >
-                  {updating ? 'Updating…' : 'Ship order (In transit)'}
-                </button>
-              )}
-              {raw === 'shipped' && (
-                <button
-                  type="button"
-                  disabled={updating}
-                  onClick={e => { e.stopPropagation(); patchStatus('delivered'); }}
-                  className="px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold bg-secondary-container text-on-secondary-container hover:brightness-95 disabled:opacity-50"
-                >
-                  {updating ? 'Updating…' : 'Mark as delivered'}
-                </button>
-              )}
-              {/* Customer cancel — Req 13 */}
-              {raw === 'processing' && (
-                <button
-                  type="button"
-                  disabled={updating}
-                  onClick={e => { e.stopPropagation(); cancelOrder(); }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  <XCircle className="w-3.5 h-3.5" strokeWidth={2} />
-                  {updating ? 'Cancelling…' : 'Cancel order'}
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={updating}
+                onClick={e => { e.stopPropagation(); cancelOrder(); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <XCircle className="w-3.5 h-3.5" strokeWidth={2} />
+                {updating ? 'Cancelling…' : 'Cancel order'}
+              </button>
             </div>
           )}
 
@@ -278,6 +237,19 @@ export default function OrderTracking() {
     refreshOrders().finally(() => setLoading(false));
   }, []);
 
+  // Auto-refresh when the tab regains focus so status changes made by the
+  // admin in another tab/window are immediately visible without a manual reload.
+  useEffect(() => {
+    const onFocus = () => refreshOrders();
+    const onVisibility = () => { if (document.visibilityState === 'visible') refreshOrders(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-surface">
       <p className="text-outline text-xs uppercase tracking-widest">Loading orders...</p>
@@ -312,6 +284,13 @@ export default function OrderTracking() {
               </p>
             </div>
           </div>
+          <button
+            onClick={refreshOrders}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
+            Refresh
+          </button>
         </div>
 
         {/* Orders list */}

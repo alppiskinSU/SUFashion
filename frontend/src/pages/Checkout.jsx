@@ -98,7 +98,14 @@ export default function Checkout() {
     setSubmitting(true);
     setErrorMsg('');
     try {
-      const { orderId } = await placeOrder(cartItems);
+      const { orderId } = await placeOrder(cartItems, {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        address: form.address,
+        city: form.city,
+        zip: form.zip,
+        country: form.country,
+      });
       clearCart();
       navigate(orderId ? `/order-confirmation/${orderId}` : '/my-orders');
     } catch (err) {

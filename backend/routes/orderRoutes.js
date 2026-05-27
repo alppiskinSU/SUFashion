@@ -18,7 +18,7 @@ const ALLOWED_TRANSITIONS = {
 
 // Create an order and reduce stock
 router.post('/', authMiddleware, async (req, res) => {
-  const { product_id, quantity } = req.body;
+  const { product_id, quantity, shipping_address } = req.body;
   const user_id = req.user.id; // Comes safely from the authMiddleware
 
   try {
@@ -56,7 +56,8 @@ router.post('/', authMiddleware, async (req, res) => {
         user_id: user_id,
         product_id: product_id,
         quantity: quantity,
-        total_price: total_price
+        total_price: total_price,
+        shipping_address: shipping_address || null,
       }])
       .select('id')
       .single();

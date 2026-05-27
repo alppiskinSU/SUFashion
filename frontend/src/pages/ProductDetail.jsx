@@ -393,6 +393,10 @@ export default function ProductDetail() {
             <div className="border-t border-outline-variant pt-8 space-y-4">
               <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-4">Product Details</h3>
               <div className="grid grid-cols-2 gap-y-3 text-sm">
+                <>
+                  <span className="text-outline">Product ID</span>
+                  <span className="text-primary font-medium">{product.id}</span>
+                </>
                 {product.model && (
                   <>
                     <span className="text-outline">Model</span>

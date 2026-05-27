@@ -119,7 +119,9 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
     }
 
     res.status(201).json({
-      message: 'Your rating is live. Your comment will appear after approval.',
+      message: hasComment
+        ? 'Your rating is live. Your comment is awaiting admin approval and will appear once reviewed.'
+        : 'Your rating has been submitted and is now live.',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
