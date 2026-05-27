@@ -57,26 +57,21 @@ router.post('/batch', authMiddleware, async (req, res) => {
         });
       }
 
-      // 3. Reduce stock
+      // 3. Reduce stock atomically — only updates if quantity is still sufficient,
+      //    preventing oversell under concurrent requests.
       const newQty = product.quantity - quantity;
-      const { error: updateError, data: updatedProduct } = await supabase
+      const { error: updateError, data: updatedRows } = await supabase
         .from('products')
         .update({ quantity: newQty })
         .eq('id', Number(product_id))
+        .gte('quantity', quantity)
         .select('quantity');
 
       if (updateError) throw updateError;
-      if (!updatedProduct || updatedProduct.length === 0) {
-        // Fallback: PostgREST sometimes returns empty array on concurrent updates. Verify manually.
-        const { data: verifyProduct } = await supabase
-          .from('products')
-          .select('quantity')
-          .eq('id', Number(product_id))
-          .single();
-
-        if (!verifyProduct || verifyProduct.quantity !== newQty) {
-          throw new Error(`Stock update failed for product ${product_id}. Wanted ${newQty}, DB has ${verifyProduct?.quantity}`);
-        }
+      if (!updatedRows || updatedRows.length === 0) {
+        return res.status(400).json({
+          error: `Not enough stock for product ${product_id}. Please refresh and try again.`,
+        });
       }
 
       // 4. Create order row
@@ -192,14 +187,19 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const total_price = product.price * quantity;
 
-    // 3. Reduce the stock
+    // 3. Reduce the stock atomically
     const newQty = product.quantity - quantity;
-    const { error: updateError } = await supabase
+    const { error: updateError, data: updatedRows } = await supabase
       .from('products')
       .update({ quantity: newQty })
-      .eq('id', product_id);
+      .eq('id', product_id)
+      .gte('quantity', quantity)
+      .select('quantity');
 
     if (updateError) throw updateError;
+    if (!updatedRows || updatedRows.length === 0) {
+      return res.status(400).json({ error: 'Not enough stock available' });
+    }
 
     // 4. Create the new order
     const { data: newOrder, error: insertError } = await supabase
