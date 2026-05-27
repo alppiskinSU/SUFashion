@@ -101,6 +101,7 @@ export default function Checkout() {
       const { orderId, orderGroup } = await placeOrder(cartItems, {
         firstName: form.firstName,
         lastName: form.lastName,
+        email: form.email,
         address: form.address,
         city: form.city,
         zip: form.zip,

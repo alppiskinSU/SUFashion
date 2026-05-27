@@ -21,7 +21,7 @@ export async function placeOrder(cartItems, shippingInfo = {}) {
     throw err;
   }
 
-  const { firstName, lastName, address, city, zip, country } = shippingInfo;
+  const { firstName, lastName, email, address, city, zip, country } = shippingInfo;
   const shipping_address = [
     firstName && lastName ? `${firstName} ${lastName}` : '',
     address,
@@ -33,12 +33,18 @@ export async function placeOrder(cartItems, shippingInfo = {}) {
   const items = cartItems.map(item => ({
     product_id: item.product_id ?? item.id,
     quantity: item.quantity,
+    name: item.name,
   }));
 
   const res = await authFetch(`${API_BASE}/api/orders/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, shipping_address }),
+    body: JSON.stringify({
+      items,
+      shipping_address,
+      email: email || null,
+      customer_name: firstName && lastName ? `${firstName} ${lastName}` : (firstName || lastName || null),
+    }),
   });
 
   let data = {};

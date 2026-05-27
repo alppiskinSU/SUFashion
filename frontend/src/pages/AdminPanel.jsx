@@ -316,7 +316,7 @@ export default function AdminPanel() {
     }
   };
 
-  /* ── Order status update ── */
+  /* ── Order status update (single order) ── */
   const handleStatusUpdate = async (orderId, newStatus) => {
     setStatusLoading(orderId);
     try {
@@ -331,6 +331,28 @@ export default function AdminPanel() {
         o.id === orderId ? { ...o, status: data.order?.status ?? newStatus } : o
       ));
       showToast('approve', `Order updated to ${STATUS_LABEL[data.order?.status ?? newStatus]}`);
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setStatusLoading(null);
+    }
+  };
+
+  /* ── Order status update (group) ── */
+  const handleGroupStatusUpdate = async (groupId, newStatus) => {
+    setStatusLoading(groupId);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/orders/group/${groupId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setOrders(prev => prev.map(o =>
+        o.order_group === groupId ? { ...o, status: data.status ?? newStatus } : o
+      ));
+      showToast('approve', `Order updated to ${STATUS_LABEL[data.status ?? newStatus]}`);
     } catch (err) {
       showToast('error', err.message);
     } finally {
@@ -617,63 +639,142 @@ export default function AdminPanel() {
               </div>
             ) : (
               <div className="space-y-3">
-                {orders.map(order => {
-                  const next = NEXT_STATUS[order.status];
-                  return (
-                    <div key={order.id} className="bg-surface-container border border-outline-variant p-6 md:p-8">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                {(() => {
+                  // Group orders by order_group; ungrouped orders shown individually
+                  const grouped = [];
+                  const groupMap = new Map();
+                  for (const order of orders) {
+                    if (order.order_group) {
+                      if (!groupMap.has(order.order_group)) {
+                        const g = {
+                          isGroup: true,
+                          groupId: order.order_group,
+                          created_at: order.created_at,
+                          status: order.status,
+                          total_price: 0,
+                          items: [],
+                        };
+                        groupMap.set(order.order_group, g);
+                        grouped.push(g);
+                      }
+                      const g = groupMap.get(order.order_group);
+                      g.total_price += Number(order.total_price);
+                      g.items.push(order);
+                    } else {
+                      grouped.push({ isGroup: false, ...order });
+                    }
+                  }
 
-                        {/* Product image */}
-                        <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
-                          {order.products?.image_url
-                            ? <img src={order.products.image_url} alt={order.products.name} className="w-full h-full object-cover" />
-                            : <Package className="w-5 h-5 text-outline m-auto mt-3" strokeWidth={1} />
-                          }
-                        </div>
-
-                        {/* Details */}
-                        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Order ID</p>
-                            <p className="text-xs font-bold text-primary truncate">{order.id}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Product</p>
-                            <p className="text-xs text-primary truncate">{order.products?.name ?? '—'}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Total</p>
-                            <p className="text-xs text-primary">${fmt(order.total_price)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Date</p>
-                            <p className="text-xs text-primary">{formatDate(order.created_at)}</p>
-                          </div>
-                        </div>
-
-                        {/* Status + action */}
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[order.status] ?? STATUS_COLOR.processing}`}>
-                            {STATUS_LABEL[order.status] ?? order.status}
-                          </span>
-                          {next && (
-                            <button
-                              onClick={() => handleStatusUpdate(order.id, next.value)}
-                              disabled={statusLoading === order.id}
-                              className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
-                            >
-                              {statusLoading === order.id
-                                ? <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
-                                : <><Truck className="w-3.5 h-3.5" strokeWidth={2} /><ChevronRight className="w-3 h-3" strokeWidth={2} /></>
+                  return grouped.map(entry => {
+                    if (entry.isGroup) {
+                      const next = NEXT_STATUS[entry.status];
+                      const firstImg = entry.items[0]?.products?.image_url;
+                      const names = entry.items.map(i => i.products?.name ?? '—').join(', ');
+                      return (
+                        <div key={entry.groupId} className="bg-surface-container border border-outline-variant p-6 md:p-8">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                            {/* First product image */}
+                            <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
+                              {firstImg
+                                ? <img src={firstImg} alt="Order" className="w-full h-full object-cover" />
+                                : <Package className="w-5 h-5 text-outline m-auto mt-3" strokeWidth={1} />
                               }
-                              {next.label}
-                            </button>
-                          )}
+                            </div>
+                            {/* Details */}
+                            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Order Group</p>
+                                <p className="text-xs font-bold text-primary truncate">{entry.groupId.slice(0, 8)}…</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Products ({entry.items.length})</p>
+                                <p className="text-xs text-primary truncate" title={names}>{names}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Total</p>
+                                <p className="text-xs text-primary">${fmt(entry.total_price)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Date</p>
+                                <p className="text-xs text-primary">{formatDate(entry.created_at)}</p>
+                              </div>
+                            </div>
+                            {/* Status + action */}
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[entry.status] ?? STATUS_COLOR.processing}`}>
+                                {STATUS_LABEL[entry.status] ?? entry.status}
+                              </span>
+                              {next && (
+                                <button
+                                  onClick={() => handleGroupStatusUpdate(entry.groupId, next.value)}
+                                  disabled={statusLoading === entry.groupId}
+                                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+                                >
+                                  {statusLoading === entry.groupId
+                                    ? <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
+                                    : <><Truck className="w-3.5 h-3.5" strokeWidth={2} /><ChevronRight className="w-3 h-3" strokeWidth={2} /></>
+                                  }
+                                  {next.label}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Single (ungrouped) order
+                    const next = NEXT_STATUS[entry.status];
+                    return (
+                      <div key={entry.id} className="bg-surface-container border border-outline-variant p-6 md:p-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                          <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
+                            {entry.products?.image_url
+                              ? <img src={entry.products.image_url} alt={entry.products.name} className="w-full h-full object-cover" />
+                              : <Package className="w-5 h-5 text-outline m-auto mt-3" strokeWidth={1} />
+                            }
+                          </div>
+                          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Order ID</p>
+                              <p className="text-xs font-bold text-primary truncate">{entry.id}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Product</p>
+                              <p className="text-xs text-primary truncate">{entry.products?.name ?? '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Total</p>
+                              <p className="text-xs text-primary">${fmt(entry.total_price)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-outline mb-0.5">Date</p>
+                              <p className="text-xs text-primary">{formatDate(entry.created_at)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[entry.status] ?? STATUS_COLOR.processing}`}>
+                              {STATUS_LABEL[entry.status] ?? entry.status}
+                            </span>
+                            {next && (
+                              <button
+                                onClick={() => handleStatusUpdate(entry.id, next.value)}
+                                disabled={statusLoading === entry.id}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+                              >
+                                {statusLoading === entry.id
+                                  ? <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
+                                  : <><Truck className="w-3.5 h-3.5" strokeWidth={2} /><ChevronRight className="w-3 h-3" strokeWidth={2} /></>
+                                }
+                                {next.label}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             )}
           </>

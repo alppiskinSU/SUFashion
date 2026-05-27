@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { supabase } = require('../db'); 
-const { authMiddleware, requireRole } = require('../middleware/authMiddleware'); 
+const { supabase } = require('../db');
+const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
+const { sendOrderConfirmation } = require('../utils/emailService');
 
 /* ── Status constants ──
  * DB CHECK constraint accepts: processing, shipped, delivered, cancelled
@@ -19,9 +20,9 @@ const ALLOWED_TRANSITIONS = {
 
 // ── Batch order: create multiple order rows under one order_group ──
 // POST /api/orders/batch
-// Body: { items: [{ product_id, quantity }], shipping_address }
+// Body: { items: [{ product_id, quantity, name }], shipping_address, email, customer_name }
 router.post('/batch', authMiddleware, async (req, res) => {
-  const { items, shipping_address } = req.body;
+  const { items, shipping_address, email, customer_name } = req.body;
   const user_id = req.user.id;
   console.log('[BATCH] Items received:', items);
 
@@ -36,12 +37,12 @@ router.post('/batch', authMiddleware, async (req, res) => {
     const createdOrders = [];
 
     for (const item of items) {
-      const { product_id, quantity } = item;
+      const { product_id, quantity, name: itemName } = item;
 
       // 1. Check product exists & get stock/price
       const { data: product, error: fetchError } = await supabase
         .from('products')
-        .select('quantity, price')
+        .select('quantity, price, name')
         .eq('id', product_id)
         .single();
 
@@ -72,7 +73,7 @@ router.post('/batch', authMiddleware, async (req, res) => {
           .select('quantity')
           .eq('id', Number(product_id))
           .single();
-          
+
         if (!verifyProduct || verifyProduct.quantity !== newQty) {
           throw new Error(`Stock update failed for product ${product_id}. Wanted ${newQty}, DB has ${verifyProduct?.quantity}`);
         }
@@ -95,7 +96,14 @@ router.post('/batch', authMiddleware, async (req, res) => {
 
       if (insertError) throw insertError;
 
-      createdOrders.push({ order_id: newOrder.id, product_id, total_price });
+      createdOrders.push({
+        order_id: newOrder.id,
+        product_id,
+        total_price,
+        name: product.name || itemName || `Product #${product_id}`,
+        quantity,
+        unit_price: product.price,
+      });
 
       // 5. Update popularity
       const { data: orderStats } = await supabase
@@ -118,6 +126,21 @@ router.post('/batch', authMiddleware, async (req, res) => {
       orders: createdOrders,
       total_price: grandTotal,
     });
+
+    // Send confirmation email (non-blocking — order is already confirmed above)
+    if (email) {
+      const orderDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+      });
+      sendOrderConfirmation(email, {
+        customerName: customer_name || email,
+        orderGroup: order_group,
+        items: createdOrders,
+        shippingAddress: shipping_address || '—',
+        grandTotal,
+        orderDate,
+      }).catch(err => console.error('[Mail] Confirmation failed silently:', err.message));
+    }
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -362,6 +385,52 @@ router.post('/:id/cancel', authMiddleware, async (req, res) => {
       .eq('id', order.product_id);
 
     res.json({ message: 'Order cancelled', order_id: order.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Update all orders in a group to the same status ──
+// PATCH /api/orders/group/:groupId/status
+router.patch('/group/:groupId/status', authMiddleware, requireRole('admin'), async (req, res) => {
+  let { status } = req.body;
+  const { groupId } = req.params;
+
+  if (STATUS_ALIASES[status]) status = STATUS_ALIASES[status];
+  if (!status || !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({
+      error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+    });
+  }
+
+  try {
+    const { data: orders, error: fetchError } = await supabase
+      .from('orders')
+      .select('id, status')
+      .eq('order_group', groupId);
+
+    if (fetchError) throw fetchError;
+    if (!orders || orders.length === 0)
+      return res.status(404).json({ error: 'Order group not found' });
+
+    for (const order of orders) {
+      if (order.status === status) continue;
+      const allowed = ALLOWED_TRANSITIONS[order.status || 'processing'] || [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({
+          error: `Cannot transition order ${order.id} from "${order.status}" to "${status}". Allowed: ${allowed.join(', ') || 'none'}`,
+        });
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('order_group', groupId);
+
+    if (updateError) throw updateError;
+
+    res.json({ message: `Group updated to ${status}`, status });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

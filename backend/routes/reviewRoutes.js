@@ -61,19 +61,40 @@ async function userHasReceivedProduct(userId, productId) {
   return Array.isArray(data) && data.length > 0;
 }
 
-// GET /api/reviews/can-review/:product_id — frontend uses this to decide
-// whether to show the review form. Returns { canReview: boolean }.
+// GET /api/reviews/can-review/:product_id — returns what review actions the user can still take.
 router.get('/can-review/:product_id', authMiddleware, async (req, res) => {
   try {
-    const canReview = await userHasReceivedProduct(req.user.id, req.params.product_id);
-    res.json({ canReview });
+    const received = await userHasReceivedProduct(req.user.id, req.params.product_id);
+    if (!received) {
+      return res.json({ canReview: false, canRateOnly: false, canRateWithComment: false });
+    }
+
+    const { data: existing } = await supabase
+      .from('reviews')
+      .select('id, comment')
+      .eq('user_id', req.user.id)
+      .eq('product_id', parseInt(req.params.product_id, 10));
+
+    const hasRatingOnly = (existing || []).some(r => !r.comment || r.comment.trim() === '');
+    const hasRatingWithComment = (existing || []).some(r => r.comment && r.comment.trim() !== '');
+
+    const canRateOnly = !hasRatingOnly;
+    const canRateWithComment = !hasRatingWithComment;
+
+    res.json({ canReview: canRateOnly || canRateWithComment, canRateOnly, canRateWithComment });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Add a review (login + purchase required)
-// Rating is immediately active; a comment (when supplied) awaits moderation.
+// Add or update a review (login + purchase required).
+//
+// Two-right system per (user, product):
+//   Right 1 — Submit a star rating (no comment). Row is inserted, approved immediately.
+//   Right 2 — Add a comment to that rating. Row is UPDATED (not inserted), sent for moderation.
+//
+// This design works with the existing UNIQUE(user_id, product_id) DB constraint
+// because the second action updates the existing row instead of inserting a new one.
 router.post('/:product_id', authMiddleware, async (req, res) => {
   try {
     const { rating, comment } = req.body;
@@ -81,41 +102,60 @@ router.post('/:product_id', authMiddleware, async (req, res) => {
     if (!rating || rating < 1 || rating > 5)
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
 
-    // Reviews are reserved for actual buyers — server-side guard so it can't
-    // be bypassed even if the UI is tampered with.
     const purchased = await userHasReceivedProduct(req.user.id, req.params.product_id);
     if (!purchased) {
-      return res.status(403).json({
-        error: 'You can only review products you have purchased.',
-      });
+      return res.status(403).json({ error: 'You can only review products you have purchased.' });
     }
 
     const hasComment = !!(comment && comment.trim().length > 0);
+    const productId = parseInt(req.params.product_id, 10);
 
-    const { error } = await supabase.from('reviews').insert({
-      user_id: req.user.id,
-      product_id: parseInt(req.params.product_id, 10),
-      rating,
-      comment: hasComment ? comment : null,
-      // Rating-only submissions count as approved (so the rating shows up
-      // immediately). Submissions with a comment must still be moderated.
-      approved: !hasComment,
-    });
+    // Fetch existing review for this user+product (at most one row due to unique constraint)
+    const { data: existingRows } = await supabase
+      .from('reviews')
+      .select('id, comment')
+      .eq('user_id', req.user.id)
+      .eq('product_id', productId)
+      .limit(1);
 
-    if (error) return res.status(500).json({ error: error.message });
+    const existing = existingRows?.[0] ?? null;
+    const existingHasComment = !!(existing?.comment && existing.comment.trim() !== '');
 
-    // Update product popularity = avg_rating across all reviews (rating-based sort)
+    if (!existing) {
+      // First submission: INSERT
+      const { error } = await supabase.from('reviews').insert({
+        user_id: req.user.id,
+        product_id: productId,
+        rating,
+        comment: hasComment ? comment.trim() : null,
+        approved: !hasComment,
+      });
+      if (error) return res.status(500).json({ error: error.message });
+    } else if (!existingHasComment && hasComment) {
+      // Second submission: user is adding a comment to their rating → UPDATE
+      const { error } = await supabase
+        .from('reviews')
+        .update({ rating, comment: comment.trim(), approved: false })
+        .eq('id', existing.id);
+      if (error) return res.status(500).json({ error: error.message });
+    } else if (!existingHasComment && !hasComment) {
+      return res.status(400).json({ error: 'You have already submitted a rating for this product.' });
+    } else {
+      return res.status(400).json({ error: 'You have already submitted a review with a comment for this product.' });
+    }
+
+    // Recompute avg_rating-based popularity
     const { data: allRatings } = await supabase
       .from('reviews')
       .select('rating')
-      .eq('product_id', req.params.product_id);
+      .eq('product_id', productId);
 
     if (allRatings && allRatings.length > 0) {
       const avg = allRatings.reduce((s, r) => s + r.rating, 0) / allRatings.length;
       await supabase
         .from('products')
         .update({ popularity: Math.round(avg * 20) })
-        .eq('id', req.params.product_id);
+        .eq('id', productId);
     }
 
     res.status(201).json({

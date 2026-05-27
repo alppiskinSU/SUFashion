@@ -99,6 +99,8 @@ export default function ProductDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
   const [canReview, setCanReview] = useState(false);
+  const [canRateOnly, setCanRateOnly] = useState(false);
+  const [canRateWithComment, setCanRateWithComment] = useState(false);
 
   /* load user from localStorage */
   useEffect(() => {
@@ -215,8 +217,20 @@ export default function ProductDetail() {
     let cancelled = false;
     authFetch(`http://localhost:3000/api/reviews/can-review/${product.id}`)
       .then(r => r.json())
-      .then(d => { if (!cancelled) setCanReview(!!d.canReview); })
-      .catch(() => { if (!cancelled) setCanReview(false); });
+      .then(d => {
+        if (!cancelled) {
+          setCanReview(!!d.canReview);
+          setCanRateOnly(!!d.canRateOnly);
+          setCanRateWithComment(!!d.canRateWithComment);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCanReview(false);
+          setCanRateOnly(false);
+          setCanRateWithComment(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [currentUser?.id, product?.id]);
 
@@ -481,15 +495,36 @@ export default function ProductDetail() {
               </p>
             ) : !canReview ? (
               <p className="text-sm text-outline">
-                You can only review products you have purchased.
+                You can only review products you have purchased and received.
               </p>
             ) : submitMsg ? (
-              <div className="bg-surface-container px-6 py-4">
+              <div className="bg-surface-container px-6 py-4 space-y-3">
                 <p className="text-sm text-primary font-medium">{submitMsg}</p>
+                {/* Allow another submission if the other type is still available */}
+                {(canRateOnly || canRateWithComment) && (
+                  <button
+                    onClick={() => setSubmitMsg('')}
+                    className="text-[10px] uppercase tracking-widest font-bold text-primary underline underline-offset-4 hover:opacity-70"
+                  >
+                    {canRateOnly ? 'Also submit a star rating →' : 'Also write a comment review →'}
+                  </button>
+                )}
               </div>
             ) : (
               <form onSubmit={handleReviewSubmit} className="space-y-5">
-                <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Write a Review</h3>
+                <h3 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">
+                  {canRateOnly && canRateWithComment
+                    ? 'Write a Review'
+                    : canRateOnly
+                    ? 'Submit a Star Rating'
+                    : 'Write a Comment Review'}
+                </h3>
+
+                {!canRateOnly && canRateWithComment && (
+                  <p className="text-[10px] text-outline uppercase tracking-widest">
+                    You have already rated this product. You can still write a comment review.
+                  </p>
+                )}
 
                 <div>
                   <p className="text-xs text-outline mb-2 uppercase tracking-widest">Your Rating</p>
@@ -499,19 +534,30 @@ export default function ProductDetail() {
                   />
                 </div>
 
-                <div>
-                  <p className="text-xs text-outline mb-2 uppercase tracking-widest">Comment (optional)</p>
-                  <textarea
-                    value={reviewForm.comment}
-                    onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
-                    placeholder="Share your thoughts — will appear after approval"
-                    rows={4}
-                    className="w-full border border-outline-variant px-4 py-3 text-sm text-primary bg-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none transition-colors"
-                  />
-                </div>
+                {canRateWithComment && (
+                  <div>
+                    <p className="text-xs text-outline mb-2 uppercase tracking-widest">
+                      Comment {canRateOnly ? '(optional)' : '(required for this submission)'}
+                    </p>
+                    <textarea
+                      value={reviewForm.comment}
+                      onChange={e => setReviewForm(f => ({ ...f, comment: e.target.value }))}
+                      placeholder="Share your thoughts — will appear after approval"
+                      rows={4}
+                      className="w-full border border-outline-variant px-4 py-3 text-sm text-primary bg-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none transition-colors"
+                    />
+                  </div>
+                )}
 
-                <Button type="submit" disabled={reviewForm.rating === 0 || submitting}>
-                  {submitting ? 'Submitting…' : 'Submit Review'}
+                <Button
+                  type="submit"
+                  disabled={
+                    reviewForm.rating === 0 ||
+                    submitting ||
+                    (!canRateOnly && canRateWithComment && !reviewForm.comment.trim())
+                  }
+                >
+                  {submitting ? 'Submitting…' : 'Submit'}
                 </Button>
               </form>
             )}
