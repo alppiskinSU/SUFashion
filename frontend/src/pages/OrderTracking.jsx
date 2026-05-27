@@ -222,6 +222,167 @@ function OrderCard({ order, onRefresh }) {
   );
 }
 
+function OrderGroupCard({ group, onRefresh }) {
+  const [expanded, setExpanded] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const uiStatus = normalizeOrderStatus(group.status);
+  const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
+  const raw = group.status || 'processing';
+
+  const cancelGroup = async () => {
+    if (!window.confirm('Cancel this entire order? Stock will be returned for all items.')) return;
+    setUpdating(true);
+    try {
+      // Cancel each item in the group
+      for (const order of group.items) {
+        if (order.status !== 'cancelled') {
+          const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/cancel`, { method: 'POST' });
+          if (!res.ok) {
+            const data = await res.json();
+            console.error(data.error);
+          }
+        }
+      }
+      await onRefresh?.();
+    } catch (e) {
+      alert('Could not fully cancel group.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const firstImage = group.items[0]?.products?.image_url;
+  const itemNames = group.items.map(i => i.products?.name).join(', ');
+
+  return (
+    <div className="bg-surface-container-low">
+
+      {/* Card header */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        className="cursor-pointer w-full p-8 md:p-10 flex flex-col sm:flex-row sm:items-center gap-6 group"
+      >
+        <div className="flex-none flex items-center gap-4 hover:opacity-75 transition-opacity">
+          <div className="bg-surface-container overflow-hidden flex-none w-14" style={{ height: '72px' }}>
+            {firstImage
+              ? <img
+                  src={firstImage}
+                  alt="Group"
+                  className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                />
+              : <div className="w-full h-full flex items-center justify-center">
+                  <Package className="w-5 h-5 text-outline" strokeWidth={1} />
+                </div>
+            }
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Products ({group.items.length})</p>
+            <p className="text-sm font-bold text-primary max-w-[140px] truncate">{itemNames}</p>
+          </div>
+        </div>
+
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Order</p>
+            <p className="text-sm font-bold text-primary">{group.items.map(i => i.id).join(', ')}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
+            <p className="text-sm text-primary">{group.created_at ? new Date(group.created_at).toLocaleDateString() : '—'}</p>
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Total</p>
+            <p className="text-sm text-primary">${fmt(group.total_price)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Status</p>
+            <span className={`inline-block text-[10px] uppercase tracking-widest font-bold px-3 py-1 ${cfg.color}`}>
+              {cfg.label}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex-none text-outline group-hover:text-primary transition-colors">
+          {expanded
+            ? <ChevronUp className="w-5 h-5" strokeWidth={1.5} />
+            : <ChevronDown className="w-5 h-5" strokeWidth={1.5} />
+          }
+        </div>
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="border-t border-outline-variant px-8 md:px-10 pb-10">
+          {raw !== 'cancelled' && (
+            <StatusTimeline currentStatus={raw} />
+          )}
+
+          {raw === 'processing' && (
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={updating}
+                onClick={e => { e.stopPropagation(); cancelGroup(); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <XCircle className="w-3.5 h-3.5" strokeWidth={2} />
+                {updating ? 'Cancelling…' : 'Cancel entire order'}
+              </button>
+            </div>
+          )}
+
+          <div className="mt-10 space-y-6">
+            <p className="text-[10px] uppercase tracking-widest text-outline">Items in Order</p>
+            {group.items.map(order => (
+              <Link
+                key={order.id}
+                to={`/product/${order.product_id}`}
+                className="flex gap-5 group/item hover:opacity-80 transition-opacity mb-4"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="w-16 h-20 bg-surface-container flex-none overflow-hidden">
+                  <img
+                    src={order.products?.image_url}
+                    alt={order.products?.name}
+                    className="w-full h-full object-cover grayscale group-hover/item:grayscale-0 transition-all duration-700"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col justify-between py-0.5">
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-primary group-hover/item:underline">{order.products?.name}</h4>
+                    <p className="text-[10px] uppercase tracking-widest text-outline mt-1">Item #{order.id} — View product →</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {order.quantity}</span>
+                    <span className="text-sm font-medium text-primary">${fmt(order.products?.price * order.quantity)}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-8 flex items-center gap-6">
+            <Link
+              to={`/order-confirmation/group/${group.id}`}
+              className="inline-flex items-center gap-2 text-[10px] uppercase tracking-widest text-outline hover:text-primary font-bold transition-colors"
+            >
+              View Invoice →
+            </Link>
+            {uiStatus === 'delivered' && (
+              <Link
+                to="/refunds"
+                className="inline-flex items-center gap-2 text-[10px] uppercase tracking-widest text-outline hover:text-primary font-bold transition-colors"
+              >
+                Request Return / Refund →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OrderTracking() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -307,9 +468,45 @@ export default function OrderTracking() {
           </div>
         ) : (
           <div className="space-y-4">
-            {orders.map(order => (
-              <OrderCard key={order.id} order={order} onRefresh={refreshOrders} />
-            ))}
+            {(() => {
+              // Group orders by order_group
+              const groupedOrders = [];
+              const groupMap = new Map();
+          
+              for (const order of orders) {
+                if (order.order_group) {
+                  if (!groupMap.has(order.order_group)) {
+                    const group = {
+                      isGroup: true,
+                      id: order.order_group,
+                      displayId: order.id, // Primary ID to show
+                      created_at: order.created_at,
+                      status: order.status,
+                      total_price: 0,
+                      items: [],
+                    };
+                    groupMap.set(order.order_group, group);
+                    groupedOrders.push(group);
+                  }
+                  const group = groupMap.get(order.order_group);
+                  group.total_price += Number(order.total_price);
+                  group.items.push(order);
+                } else {
+                  groupedOrders.push({
+                    isGroup: false,
+                    ...order
+                  });
+                }
+              }
+
+              return groupedOrders.map(groupOrOrder => {
+                if (groupOrOrder.isGroup) {
+                  return <OrderGroupCard key={groupOrOrder.id} group={groupOrOrder} onRefresh={refreshOrders} />;
+                } else {
+                  return <OrderCard key={groupOrOrder.id} order={groupOrOrder} onRefresh={refreshOrders} />;
+                }
+              });
+            })()}
           </div>
         )}
       </main>

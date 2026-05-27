@@ -10,24 +10,37 @@ import { authFetch } from '../lib/authFetch';
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
 export default function OrderConfirmation() {
-  const { orderId } = useParams();
-  const [order, setOrder] = useState(null);
+  const { orderId, groupId } = useParams();
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [invoiceEmail, setInvoiceEmail] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
 
   useEffect(() => {
-    authFetch(`http://localhost:3000/api/orders/${orderId}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) setError(data.error);
-        else setOrder(data.order);
-      })
-      .catch(() => setError('Could not load order.'))
-      .finally(() => setLoading(false));
-  }, [orderId]);
+    async function fetchData() {
+      try {
+        if (groupId) {
+          // Fetch all orders in the group
+          const res = await authFetch(`http://localhost:3000/api/orders/group/${groupId}`);
+          const data = await res.json();
+          if (data.error) setError(data.error);
+          else setOrders(data.orders || []);
+        } else if (orderId) {
+          // Fetch single order (backward compat)
+          const res = await authFetch(`http://localhost:3000/api/orders/${orderId}`);
+          const data = await res.json();
+          if (data.error) setError(data.error);
+          else setOrders(data.order ? [data.order] : []);
+        }
+      } catch {
+        setError('Could not load order.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [orderId, groupId]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-surface">
@@ -35,16 +48,42 @@ export default function OrderConfirmation() {
     </div>
   );
 
-  if (error || !order) return (
+  if (error || orders.length === 0) return (
     <div className="min-h-screen flex items-center justify-center bg-surface">
       <p className="text-outline text-xs uppercase tracking-widest">{error || 'Order not found.'}</p>
     </div>
   );
 
-  const subtotal = order.total_price ?? 0;
+  const subtotal = orders.reduce((s, o) => s + Number(o.total_price || 0), 0);
   const tax = Math.round(subtotal * 0.08 * 100) / 100;
   const total = subtotal + tax;
-  const orderDate = order.created_at ? new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  const orderDate = orders[0]?.created_at
+    ? new Date(orders[0].created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '';
+  const displayOrderId = groupId
+    ? orders.map(o => o.id).join(', ')
+    : orders[0]?.id;
+
+  const sendInvoiceForAll = async (e) => {
+    e.preventDefault();
+    if (!invoiceEmail) return;
+    setEmailStatus('sending');
+    try {
+      // Send invoice for each order in the group
+      for (const order of orders) {
+        const res = await authFetch(`http://localhost:3000/api/invoices/send/${order.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: invoiceEmail }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+      }
+      setEmailStatus('sent');
+    } catch {
+      setEmailStatus('error');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
@@ -94,8 +133,8 @@ export default function OrderConfirmation() {
 
               <div className="grid grid-cols-2 gap-6 text-sm">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Order Number</p>
-                  <p className="font-bold text-primary">{order.id}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Order Number{orders.length > 1 ? 's' : ''}</p>
+                  <p className="font-bold text-primary">{displayOrderId}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
@@ -104,12 +143,12 @@ export default function OrderConfirmation() {
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Status</p>
                   <span className="inline-block bg-secondary-container text-on-secondary-container text-[10px] uppercase tracking-widest font-bold px-3 py-1">
-                    {order.status ?? 'Processing'}
+                    {orders[0]?.status ?? 'Processing'}
                   </span>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Quantity</p>
-                  <p className="text-primary">{order.quantity}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Items</p>
+                  <p className="text-primary">{orders.reduce((s, o) => s + (o.quantity || 0), 0)}</p>
                 </div>
               </div>
             </section>
@@ -118,22 +157,24 @@ export default function OrderConfirmation() {
             <section>
               <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-primary mb-8">Items Ordered</h2>
               <div className="space-y-6">
-                <div className="flex gap-5 group">
-                  <div className="w-20 h-24 bg-surface-container flex-none overflow-hidden">
-                    <img
-                      src={order.products?.image_url}
-                      alt={order.products?.name}
-                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
-                    />
-                  </div>
-                  <div className="flex-1 flex flex-col justify-between py-0.5 border-b border-outline-variant pb-6">
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-primary">{order.products?.name}</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {order.quantity}</span>
-                      <span className="text-sm font-medium text-primary">${fmt(order.products?.price * order.quantity)}</span>
+                {orders.map(order => (
+                  <div key={order.id} className="flex gap-5 group">
+                    <div className="w-20 h-24 bg-surface-container flex-none overflow-hidden">
+                      <img
+                        src={order.products?.image_url}
+                        alt={order.products?.name}
+                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                      />
+                    </div>
+                    <div className="flex-1 flex flex-col justify-between py-0.5 border-b border-outline-variant pb-6">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-primary">{order.products?.name}</h4>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-outline">Qty: {order.quantity}</span>
+                        <span className="text-sm font-medium text-primary">${fmt(order.products?.price * order.quantity)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             </section>
 
@@ -167,7 +208,7 @@ export default function OrderConfirmation() {
                 <Package className="w-5 h-5 text-primary" strokeWidth={1} />
                 <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Order Total</h2>
               </div>
-              <p className="text-2xl font-medium text-primary">${fmt(order.total_price)}</p>
+              <p className="text-2xl font-medium text-primary">${fmt(subtotal)}</p>
               <p className="text-[10px] uppercase tracking-widest text-outline mt-2">Incl. tax & complimentary shipping</p>
             </div>
 
@@ -177,25 +218,7 @@ export default function OrderConfirmation() {
                 <Mail className="w-5 h-5 text-primary" strokeWidth={1} />
                 <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-primary">Email Invoice</h2>
               </div>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                if (!invoiceEmail) return;
-                setEmailStatus('sending');
-                setPreviewUrl('');
-                try {
-                  const res = await authFetch(`http://localhost:3000/api/invoices/send/${orderId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: invoiceEmail }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error);
-                  if (data.previewUrl) setPreviewUrl(data.previewUrl);
-                  setEmailStatus('sent');
-                } catch {
-                  setEmailStatus('error');
-                }
-              }}>
+              <form onSubmit={sendInvoiceForAll}>
                 <Input
                   label="Email Address"
                   id="invoiceEmail"
@@ -213,16 +236,7 @@ export default function OrderConfirmation() {
                 {emailStatus === 'error' && (
                   <p className="text-red-500 text-[10px] uppercase tracking-widest mt-2">Failed to send. Try again.</p>
                 )}
-                {emailStatus === 'sent' && previewUrl && (
-                  <div className="mt-4 border border-outline-variant bg-surface-container p-4">
-                    <p className="text-[10px] uppercase tracking-widest text-outline mb-2">Invoice emailed — preview:</p>
-                    <a href={previewUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] uppercase tracking-widest font-bold text-primary underline underline-offset-4 hover:opacity-80 break-all">
-                      Open Email Preview →
-                    </a>
-                  </div>
-                )}
-                {emailStatus === 'sent' && !previewUrl && (
+                {emailStatus === 'sent' && (
                   <p className="text-emerald-600 text-[10px] uppercase tracking-widest mt-2">Invoice sent to {invoiceEmail}</p>
                 )}
               </form>

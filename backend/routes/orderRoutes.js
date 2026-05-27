@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { supabase } = require('../db'); 
 const { authMiddleware, requireRole } = require('../middleware/authMiddleware'); 
 
@@ -15,6 +16,134 @@ const ALLOWED_TRANSITIONS = {
   'delivered':  [],          // terminal state
   'cancelled':  [],          // terminal state
 };
+
+// ── Batch order: create multiple order rows under one order_group ──
+// POST /api/orders/batch
+// Body: { items: [{ product_id, quantity }], shipping_address }
+router.post('/batch', authMiddleware, async (req, res) => {
+  const { items, shipping_address } = req.body;
+  const user_id = req.user.id;
+  console.log('[BATCH] Items received:', items);
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'No items provided.' });
+  }
+
+  // Generate a unique group id for this checkout
+  const order_group = crypto.randomUUID();
+
+  try {
+    const createdOrders = [];
+
+    for (const item of items) {
+      const { product_id, quantity } = item;
+
+      // 1. Check product exists & get stock/price
+      const { data: product, error: fetchError } = await supabase
+        .from('products')
+        .select('quantity, price')
+        .eq('id', product_id)
+        .single();
+
+      if (fetchError || !product) {
+        return res.status(404).json({ error: `Product ${product_id} not found` });
+      }
+
+      // 2. Check stock
+      if (product.quantity < quantity) {
+        return res.status(400).json({
+          error: `Not enough stock for product ${product_id}. Available: ${product.quantity}, requested: ${quantity}`,
+        });
+      }
+
+      // 3. Reduce stock
+      const newQty = product.quantity - quantity;
+      const { error: updateError, data: updatedProduct } = await supabase
+        .from('products')
+        .update({ quantity: newQty })
+        .eq('id', Number(product_id))
+        .select('quantity');
+
+      if (updateError) throw updateError;
+      if (!updatedProduct || updatedProduct.length === 0) {
+        // Fallback: PostgREST sometimes returns empty array on concurrent updates. Verify manually.
+        const { data: verifyProduct } = await supabase
+          .from('products')
+          .select('quantity')
+          .eq('id', Number(product_id))
+          .single();
+          
+        if (!verifyProduct || verifyProduct.quantity !== newQty) {
+          throw new Error(`Stock update failed for product ${product_id}. Wanted ${newQty}, DB has ${verifyProduct?.quantity}`);
+        }
+      }
+
+      // 4. Create order row
+      const total_price = product.price * quantity;
+      const { data: newOrder, error: insertError } = await supabase
+        .from('orders')
+        .insert([{
+          user_id,
+          product_id,
+          quantity,
+          total_price,
+          shipping_address: shipping_address || null,
+          order_group,
+        }])
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+
+      createdOrders.push({ order_id: newOrder.id, product_id, total_price });
+
+      // 5. Update popularity
+      const { data: orderStats } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('product_id', product_id)
+        .neq('status', 'cancelled');
+
+      await supabase
+        .from('products')
+        .update({ popularity: (orderStats?.length ?? 0) * 10 })
+        .eq('id', product_id);
+    }
+
+    const grandTotal = createdOrders.reduce((s, o) => s + o.total_price, 0);
+
+    res.status(201).json({
+      message: 'Order placed successfully!',
+      order_group,
+      orders: createdOrders,
+      total_price: grandTotal,
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/orders/group/:groupId — fetch all orders in a group
+router.get('/group/:groupId', authMiddleware, async (req, res) => {
+  try {
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, products(name, price, image_url)')
+      .eq('order_group', req.params.groupId)
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!orders || orders.length === 0) return res.status(404).json({ error: 'Order group not found' });
+
+    const grandTotal = orders.reduce((s, o) => s + Number(o.total_price || 0), 0);
+
+    res.json({ orders, order_group: req.params.groupId, total_price: grandTotal });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Create an order and reduce stock
 router.post('/', authMiddleware, async (req, res) => {

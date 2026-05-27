@@ -27,6 +27,7 @@ function App() {
         <Route path="/checkout"                  element={<BlockAdmin><RequireAuth><Checkout /></RequireAuth></BlockAdmin>} />
         <Route path="/product/:id"               element={<BlockAdmin><ProductDetail /></BlockAdmin>} />
         <Route path="/order-confirmation/:orderId" element={<BlockAdmin><OrderConfirmation /></BlockAdmin>} />
+        <Route path="/order-confirmation/group/:groupId" element={<BlockAdmin><OrderConfirmation /></BlockAdmin>} />
         <Route path="/my-orders"                 element={<BlockAdmin><OrderTracking /></BlockAdmin>} />
         <Route path="/refunds"                   element={<BlockAdmin><RequireAuth><ReturnRefund /></RequireAuth></BlockAdmin>} />
         <Route path="/about"                     element={<BlockAdmin><About /></BlockAdmin>} />

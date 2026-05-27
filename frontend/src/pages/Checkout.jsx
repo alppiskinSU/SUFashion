@@ -98,7 +98,7 @@ export default function Checkout() {
     setSubmitting(true);
     setErrorMsg('');
     try {
-      const { orderId } = await placeOrder(cartItems, {
+      const { orderId, orderGroup } = await placeOrder(cartItems, {
         firstName: form.firstName,
         lastName: form.lastName,
         address: form.address,
@@ -107,7 +107,14 @@ export default function Checkout() {
         country: form.country,
       });
       clearCart();
-      navigate(orderId ? `/order-confirmation/${orderId}` : '/my-orders');
+      // Navigate to group confirmation if available, fallback to single order
+      if (orderGroup) {
+        navigate(`/order-confirmation/group/${orderGroup}`);
+      } else if (orderId) {
+        navigate(`/order-confirmation/${orderId}`);
+      } else {
+        navigate('/my-orders');
+      }
     } catch (err) {
       if (err.code === 'UNAUTHENTICATED') {
         sessionStorage.setItem('postLoginRedirect', '/checkout');

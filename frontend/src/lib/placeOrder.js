@@ -3,14 +3,13 @@ import { authFetch } from './authFetch';
 const API_BASE = 'http://localhost:3000';
 
 /**
- * Submits each cart item as an order to the backend and returns the
- * id of the last successfully created order so the UI can navigate to
- * the order confirmation page.
+ * Submits all cart items as a single batch order to the backend.
+ * Returns the order_group id so the UI can navigate to the group
+ * confirmation page that shows ALL items.
  *
  * @param {Array<{id:any, product_id?:any, quantity:number}>} cartItems
  * @param {{ firstName, lastName, address, city, zip, country }} [shippingInfo]
- * @returns {Promise<{ orderId: string|null }>}
- *   Resolves with the last created order id. Throws on failure.
+ * @returns {Promise<{ orderId: string|null, orderGroup: string|null }>}
  */
 export async function placeOrder(cartItems, shippingInfo = {}) {
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
@@ -30,25 +29,26 @@ export async function placeOrder(cartItems, shippingInfo = {}) {
     country,
   ].filter(Boolean).join(', ') || null;
 
-  let lastOrderId = null;
-  for (const item of cartItems) {
-    const productId = item.product_id ?? item.id;
-    const quantity = item.quantity;
+  // Build the items array for the batch endpoint
+  const items = cartItems.map(item => ({
+    product_id: item.product_id ?? item.id,
+    quantity: item.quantity,
+  }));
 
-    const res = await authFetch(`${API_BASE}/api/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, quantity, shipping_address }),
-    });
+  const res = await authFetch(`${API_BASE}/api/orders/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, shipping_address }),
+  });
 
-    let data = {};
-    try { data = await res.json(); } catch { /* non-json response */ }
+  let data = {};
+  try { data = await res.json(); } catch { /* non-json response */ }
 
-    if (!res.ok) {
-      throw new Error(data.error || `Order failed for product ${productId} (HTTP ${res.status})`);
-    }
-    if (data.order_id) lastOrderId = data.order_id;
+  if (!res.ok) {
+    throw new Error(data.error || `Order failed (HTTP ${res.status})`);
   }
 
-  return { orderId: lastOrderId };
+  // Return the order_group for the confirmation page
+  const firstOrderId = data.orders?.[0]?.order_id || null;
+  return { orderId: firstOrderId, orderGroup: data.order_group || null };
 }
