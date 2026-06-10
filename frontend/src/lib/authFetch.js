@@ -1,26 +1,41 @@
 const BASE = 'http://localhost:3000';
 
+// Mutex: only one refresh in flight at a time.
+// Multiple concurrent 401s all wait on the same promise instead of
+// each firing their own refresh request (which would burn the refresh token).
+let _refreshPromise = null;
+
 async function refreshAccessToken() {
-  const refreshToken = sessionStorage.getItem('refreshToken');
-  if (!refreshToken) return null;
+  if (_refreshPromise) return _refreshPromise;
 
-  const res = await fetch(`${BASE}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
+  _refreshPromise = (async () => {
+    try {
+      const refreshToken = sessionStorage.getItem('refreshToken');
+      if (!refreshToken) return null;
 
-  if (!res.ok) {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('refreshToken');
-    sessionStorage.removeItem('user');
-    return null;
-  }
+      const res = await fetch(`${BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
 
-  const data = await res.json();
-  sessionStorage.setItem('token', data.token);
-  if (data.refreshToken) sessionStorage.setItem('refreshToken', data.refreshToken);
-  return data.token;
+      if (!res.ok) {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('user');
+        return null;
+      }
+
+      const data = await res.json();
+      sessionStorage.setItem('token', data.token);
+      if (data.refreshToken) sessionStorage.setItem('refreshToken', data.refreshToken);
+      return data.token;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+
+  return _refreshPromise;
 }
 
 export async function authFetch(url, options = {}) {

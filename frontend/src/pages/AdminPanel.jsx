@@ -6,7 +6,7 @@ import {
   FileText, BarChart3, DollarSign, TrendingUp, RotateCcw,
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import Navbar from '../components/layout/Navbar';
@@ -114,32 +114,32 @@ export default function AdminPanel() {
   };
 
   /* ── Fetch all orders ── */
-  const fetchOrders = async () => {
+  const fetchOrders = async (signal) => {
     setOrdersLoading(true);
     setOrdersError('');
     try {
-      const res = await authFetch('http://localhost:3000/api/orders/admin/all');
+      const res = await authFetch('http://localhost:3000/api/orders/admin/all', { signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       setOrders(data.orders ?? []);
     } catch (err) {
-      setOrdersError(err.message);
+      if (err.name !== 'AbortError') setOrdersError(err.message);
     } finally {
       setOrdersLoading(false);
     }
   };
 
   /* ── Fetch delivery list ── */
-  const fetchDeliveries = async () => {
+  const fetchDeliveries = async (signal) => {
     setDelLoading(true);
     setDelError('');
     try {
-      const res = await authFetch('http://localhost:3000/api/orders/admin/deliveries');
+      const res = await authFetch('http://localhost:3000/api/orders/admin/deliveries', { signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       setDeliveries(data.deliveries ?? []);
     } catch (err) {
-      setDelError(err.message);
+      if (err.name !== 'AbortError') setDelError(err.message);
     } finally {
       setDelLoading(false);
     }
@@ -256,13 +256,17 @@ export default function AdminPanel() {
     return () => window.removeEventListener('focus', onFocus);
   }, [tab]);
 
-  // Refetch whenever the user switches to a tab so it always reflects the
-  // latest server state.
+  // Refetch whenever the user switches to a tab. An AbortController cancels
+  // any in-flight request from the previous tab so stale responses never
+  // overwrite fresher data.
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     if (tab === 'comments')   fetchReviews();
-    if (tab === 'orders')     fetchOrders();
-    if (tab === 'deliveries') fetchDeliveries();
+    if (tab === 'orders')     fetchOrders(signal);
+    if (tab === 'deliveries') fetchDeliveries(signal);
     if (tab === 'refunds')    fetchRefunds();
+    return () => controller.abort();
   }, [tab]);
 
   /* ── Mark delivery completed (transitions through shipped if needed) ── */

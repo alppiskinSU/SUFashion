@@ -81,6 +81,7 @@ export default function Checkout() {
 
   async function handleSubmit(e) {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    // Guard at the very top — prevents double-submit from rapid clicks or Enter key
     if (submitting) return;
 
     if (!sessionStorage.getItem('token')) {
@@ -107,7 +108,10 @@ export default function Checkout() {
         zip: form.zip,
         country: form.country,
       });
+
+      // Clear cart only AFTER backend confirmed the order — prevents data loss on network failure
       clearCart();
+
       // Navigate to group confirmation if available, fallback to single order
       if (orderGroup) {
         navigate(`/order-confirmation/group/${orderGroup}`);

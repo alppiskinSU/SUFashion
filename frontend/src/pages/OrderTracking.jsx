@@ -232,20 +232,22 @@ function OrderGroupCard({ group, onRefresh }) {
   const cancelGroup = async () => {
     if (!window.confirm('Cancel this entire order? Stock will be returned for all items.')) return;
     setUpdating(true);
+    const failures = [];
     try {
-      // Cancel each item in the group
       for (const order of group.items) {
-        if (order.status !== 'cancelled') {
-          const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/cancel`, { method: 'POST' });
-          if (!res.ok) {
-            const data = await res.json();
-            console.error(data.error);
-          }
+        if (order.status === 'cancelled') continue;
+        const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/cancel`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          failures.push(data.error || `Item #${order.id} failed`);
         }
       }
       await onRefresh?.();
+      if (failures.length > 0) {
+        alert(`Some items could not be cancelled:\n${failures.join('\n')}`);
+      }
     } catch (e) {
-      alert('Could not fully cancel group.');
+      alert(e.message || 'Could not cancel order.');
     } finally {
       setUpdating(false);
     }

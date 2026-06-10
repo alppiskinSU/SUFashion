@@ -5,6 +5,17 @@ const { supabase } = require('../db');
 const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
 const { sendOrderConfirmation } = require('../utils/emailService');
 
+/* ── Helper: restore stock for already-decremented items on batch failure ── */
+async function rollbackStocks(rollbacks) {
+  for (const { pid, originalQty } of rollbacks) {
+    try {
+      await supabase.from('products').update({ quantity: originalQty }).eq('id', pid);
+    } catch (e) {
+      console.error(`[ROLLBACK] Failed to restore stock for product ${pid}:`, e.message);
+    }
+  }
+}
+
 /* ── Status constants ──
  * DB CHECK constraint accepts: processing, shipped, delivered, cancelled
  * Frontend uses "in-transit" as a label → alias mapped to "shipped"
@@ -35,25 +46,32 @@ router.post('/batch', authMiddleware, async (req, res) => {
 
   try {
     const createdOrders = [];
+    // Tracks original stock values so we can roll back on mid-loop failure.
+    const stockRollbacks = [];
 
     for (const item of items) {
       const { product_id, quantity, name: itemName } = item;
+
+      const pid = parseInt(product_id, 10);
+      if (isNaN(pid)) {
+        return res.status(400).json({ error: `Invalid product_id: ${product_id}` });
+      }
 
       // 1. Check product exists & get stock/price
       const { data: product, error: fetchError } = await supabase
         .from('products')
         .select('quantity, price, name')
-        .eq('id', product_id)
+        .eq('id', pid)
         .single();
 
       if (fetchError || !product) {
-        return res.status(404).json({ error: `Product ${product_id} not found` });
+        return res.status(404).json({ error: `Product ${pid} not found` });
       }
 
-      // 2. Check stock
+      // 2. Check stock (optimistic guard — the atomic update below is the real guard)
       if (product.quantity < quantity) {
         return res.status(400).json({
-          error: `Not enough stock for product ${product_id}. Available: ${product.quantity}, requested: ${quantity}`,
+          error: `Not enough stock for product ${pid}. Available: ${product.quantity}, requested: ${quantity}`,
         });
       }
 
@@ -63,24 +81,31 @@ router.post('/batch', authMiddleware, async (req, res) => {
       const { error: updateError, data: updatedRows } = await supabase
         .from('products')
         .update({ quantity: newQty })
-        .eq('id', Number(product_id))
+        .eq('id', pid)
         .gte('quantity', quantity)
         .select('quantity');
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        await rollbackStocks(stockRollbacks);
+        return res.status(500).json({ error: 'An error occurred while updating stock.' });
+      }
       if (!updatedRows || updatedRows.length === 0) {
+        await rollbackStocks(stockRollbacks);
         return res.status(400).json({
-          error: `Not enough stock for product ${product_id}. Please refresh and try again.`,
+          error: `Not enough stock for product ${pid}. Please refresh and try again.`,
         });
       }
 
-      // 4. Create order row
+      // Record original quantity for rollback if a later step fails
+      stockRollbacks.push({ pid, originalQty: product.quantity });
+
+      // 4. Create order row — if this fails, roll back all stock decrements
       const total_price = product.price * quantity;
       const { data: newOrder, error: insertError } = await supabase
         .from('orders')
         .insert([{
           user_id,
-          product_id,
+          product_id: pid,
           quantity,
           total_price,
           shipping_address: shipping_address || null,
@@ -89,28 +114,35 @@ router.post('/batch', authMiddleware, async (req, res) => {
         .select('id')
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        await rollbackStocks(stockRollbacks);
+        console.error('[BATCH] Order INSERT failed:', insertError.message);
+        return res.status(500).json({ error: 'An error occurred while placing your order.' });
+      }
 
       createdOrders.push({
         order_id: newOrder.id,
-        product_id,
+        product_id: pid,
         total_price,
-        name: product.name || itemName || `Product #${product_id}`,
+        name: product.name || itemName || `Product #${pid}`,
         quantity,
         unit_price: product.price,
       });
 
-      // 5. Update popularity
-      const { data: orderStats } = await supabase
+      // 5. Update popularity (best-effort, non-critical)
+      supabase
         .from('orders')
         .select('id')
-        .eq('product_id', product_id)
-        .neq('status', 'cancelled');
-
-      await supabase
-        .from('products')
-        .update({ popularity: (orderStats?.length ?? 0) * 10 })
-        .eq('id', product_id);
+        .eq('product_id', pid)
+        .neq('status', 'cancelled')
+        .then(({ data: orderStats }) => {
+          supabase
+            .from('products')
+            .update({ popularity: (orderStats?.length ?? 0) * 10 })
+            .eq('id', pid)
+            .catch(() => {});
+        })
+        .catch(() => {});
     }
 
     const grandTotal = createdOrders.reduce((s, o) => s + o.total_price, 0);
@@ -138,7 +170,8 @@ router.post('/batch', authMiddleware, async (req, res) => {
     }
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[BATCH] Unexpected error:', err.message);
+    res.status(500).json({ error: 'An error occurred while placing your order.' });
   }
 });
 
