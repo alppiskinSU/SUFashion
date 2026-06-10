@@ -13,6 +13,7 @@ async function authMiddleware(req, res, next) {
 }
 
 // Checks if the user has the required role (stored in profiles table)
+// Exposes the resolved role on req.userRole so routes can branch per role.
 function requireRole(...roles) {
   return async (req, res, next) => {
     const { data: profile } = await supabase
@@ -23,6 +24,7 @@ function requireRole(...roles) {
 
     if (!profile || !roles.includes(profile.role))
       return res.status(403).json({ error: 'Insufficient permissions' });
+    req.userRole = profile.role;
     next();
   };
 }
