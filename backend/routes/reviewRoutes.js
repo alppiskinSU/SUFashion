@@ -6,7 +6,7 @@ const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
 // ─── STATIC ROUTES FIRST (before :param routes) ───
 
 // GET /api/reviews/pending — list all pending reviews (admin only)
-router.get('/pending', authMiddleware, requireRole('admin'), async (_req, res) => {
+router.get('/pending', authMiddleware, requireRole('admin', 'product_manager'), async (_req, res) => {
   try {
     const { data: reviews, error } = await supabase
       .from('reviews')
@@ -219,7 +219,7 @@ router.get('/:product_id', async (req, res) => {
 });
 
 // PATCH /api/reviews/:id/approve — admin only
-router.patch('/:id/approve', authMiddleware, requireRole('admin'), async (req, res) => {
+router.patch('/:id/approve', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
   try {
     const { error } = await supabase
       .from('reviews')
@@ -235,7 +235,7 @@ router.patch('/:id/approve', authMiddleware, requireRole('admin'), async (req, r
 });
 
 // PATCH /api/reviews/:id/reject — deletes the review (admin only)
-router.patch('/:id/reject', authMiddleware, requireRole('admin'), async (req, res) => {
+router.patch('/:id/reject', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
   try {
     const { error } = await supabase
       .from('reviews')

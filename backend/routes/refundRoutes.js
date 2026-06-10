@@ -64,7 +64,7 @@ router.get('/user/me', authMiddleware, async (req, res) => {
 });
 
 // GET /api/refunds/admin/all — admin views all refund requests
-router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res) => {
+router.get('/admin/all', authMiddleware, requireRole('admin', 'sales_manager'), async (_req, res) => {
   try {
     const { data: refunds, error } = await supabase
       .from('refunds')
@@ -80,7 +80,7 @@ router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res)
 
 // PATCH /api/refunds/:id/status — admin approves or rejects a refund
 // Body: { "status": "approved" | "rejected" }
-router.patch('/:id/status', authMiddleware, requireRole('admin'), async (req, res) => {
+router.patch('/:id/status', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
   const { status } = req.body;
   const refundId = req.params.id;
 

@@ -272,7 +272,7 @@ router.get('/user/me', authMiddleware, async (req, res) => {
 });
 
 // GET /api/orders/admin/all — all orders (admin only)
-router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res) => {
+router.get('/admin/all', authMiddleware, requireRole('admin', 'product_manager'), async (_req, res) => {
   try {
     const { data: orders, error } = await supabase
       .from('orders')
@@ -289,7 +289,7 @@ router.get('/admin/all', authMiddleware, requireRole('admin'), async (_req, res)
 // GET /api/orders/admin/deliveries — Req 12 delivery list
 // Shape per spec: delivery_id, customer_id, product_id, quantity, total_price,
 // delivery_address, completed (true once status='delivered').
-router.get('/admin/deliveries', authMiddleware, requireRole('admin'), async (_req, res) => {
+router.get('/admin/deliveries', authMiddleware, requireRole('admin', 'product_manager'), async (_req, res) => {
   try {
     const { data: orders, error } = await supabase
       .from('orders')
@@ -392,7 +392,7 @@ router.post('/:id/cancel', authMiddleware, async (req, res) => {
 
 // ── Update all orders in a group to the same status ──
 // PATCH /api/orders/group/:groupId/status
-router.patch('/group/:groupId/status', authMiddleware, requireRole('admin'), async (req, res) => {
+router.patch('/group/:groupId/status', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
   let { status } = req.body;
   const { groupId } = req.params;
 
@@ -439,7 +439,7 @@ router.patch('/group/:groupId/status', authMiddleware, requireRole('admin'), asy
 // ── NEW: Update order status ──
 // PATCH /api/orders/:id/status
 // Body: { "status": "shipped" } or { "status": "in-transit" } (alias)
-router.patch('/:id/status', authMiddleware, requireRole('admin'), async (req, res) => {
+router.patch('/:id/status', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
   let { status } = req.body;
   const orderId = req.params.id;
 
