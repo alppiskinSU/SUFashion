@@ -19,13 +19,14 @@ export default function RequireAdmin({ children }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // Token present but user is not an admin or sales_manager → kick to customer homepage
+  // Token present but user is not a manager role → kick to customer homepage
+  const MANAGER_ROLES = ['admin', 'sales_manager', 'product_manager'];
   let isAuthorized = false;
   let isMalformed = false;
   try {
     const raw = sessionStorage.getItem('user');
     const user = raw ? JSON.parse(raw) : null;
-    if (user && (user.role === 'admin' || user.role === 'sales_manager')) {
+    if (user && MANAGER_ROLES.includes(user.role)) {
       isAuthorized = true;
     }
   } catch {
