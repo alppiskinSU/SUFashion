@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, ShoppingBag, Send, CheckCircle, XCircle, Clock, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ShoppingBag, Send, CheckCircle, XCircle, Clock, AlertTriangle, HelpCircle, CalendarClock, Timer } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { authFetch } from '../lib/authFetch';
@@ -18,6 +18,18 @@ const STATUS_LABEL = {
 };
 
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
+
+// Req 15 — 30-day refund window
+const REFUND_WINDOW_DAYS = 30;
+
+/** Returns remaining days in the refund window, or a negative number if expired. */
+function getRemainingDays(orderCreatedAt) {
+  const purchaseDate = new Date(orderCreatedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - purchaseDate.getTime();
+  const daysPassed = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return REFUND_WINDOW_DAYS - daysPassed;
+}
 
 export default function ReturnRefund() {
   const [orders, setOrders] = useState([]);
@@ -120,6 +132,10 @@ export default function ReturnRefund() {
 
   // Filter orders that are delivered
   const deliveredOrders = orders.filter(o => o.status === 'delivered');
+
+  // Separate eligible (within 30 days) and expired orders
+  const eligibleOrders = deliveredOrders.filter(o => getRemainingDays(o.created_at) > 0);
+  const expiredOrders  = deliveredOrders.filter(o => getRemainingDays(o.created_at) <= 0);
   
   // Find which delivered orders already have a refund request
   const getRefundForOrder = (orderId) => {
@@ -159,7 +175,7 @@ export default function ReturnRefund() {
               Returns & Refunds
             </h1>
             <p className="text-outline text-sm tracking-wide mt-3 max-w-xl">
-              Request a return for delivered items within the eligibility window or track your pending refunds.
+              Request a return for delivered items within <span className="font-bold text-primary">{REFUND_WINDOW_DAYS} days</span> of purchase or track your pending refunds.
             </p>
           </div>
           <button
@@ -190,18 +206,20 @@ export default function ReturnRefund() {
             <div className="lg:col-span-7 space-y-8">
               <h2 className="font-serif text-2xl italic text-primary border-b border-outline-variant pb-3 mb-6">Eligible Delivered Orders</h2>
               
-              {deliveredOrders.length === 0 ? (
+              {eligibleOrders.length === 0 && expiredOrders.length === 0 ? (
                 <div className="bg-surface-container border border-outline-variant p-8 text-center space-y-4">
                   <ShoppingBag className="w-8 h-8 text-outline mx-auto" strokeWidth={1.5} />
                   <p className="text-sm text-outline uppercase tracking-widest">No delivered orders found</p>
                   <p className="text-xs text-outline max-w-sm mx-auto leading-relaxed">
-                    Refunds can only be requested for orders that have been successfully delivered to your address.
+                    Refunds can only be requested for orders that have been successfully delivered to your address within {REFUND_WINDOW_DAYS} days of purchase.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {deliveredOrders.map(order => {
+                  {/* Eligible orders (within 30-day window) */}
+                  {eligibleOrders.map(order => {
                     const existingRefund = getRefundForOrder(order.id);
+                    const remaining = getRemainingDays(order.created_at);
                     
                     return (
                       <div key={order.id} className="bg-surface-container-low border border-outline-variant p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all duration-300 hover:border-primary/30">
@@ -224,9 +242,20 @@ export default function ReturnRefund() {
                             <div className="flex items-center gap-3 mt-2 text-[10px] text-outline uppercase tracking-widest">
                               <span>Qty: {order.quantity}</span>
                               <span>•</span>
-                              <span className="font-bold text-primary">${fmt(order.total_price)}</span>
+                              <span className="font-bold text-primary">${fmt(order.total_price * 1.08)}</span>
                               <span>•</span>
-                              <span>Delivered: {formatDate(order.created_at)}</span>
+                              <span>Purchased: {formatDate(order.created_at)}</span>
+                            </div>
+                            {/* Remaining days badge */}
+                            <div className={`inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 text-[9px] uppercase tracking-widest font-bold ${
+                              remaining <= 5
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : remaining <= 14
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}>
+                              <Timer className="w-3 h-3" strokeWidth={2} />
+                              {remaining} day{remaining !== 1 ? 's' : ''} left to return
                             </div>
                           </div>
                         </div>
@@ -249,6 +278,62 @@ export default function ReturnRefund() {
                       </div>
                     );
                   })}
+
+                  {/* Expired orders (past 30-day window) */}
+                  {expiredOrders.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 mt-8 mb-2">
+                        <CalendarClock className="w-4 h-4 text-outline" strokeWidth={1.5} />
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-outline">Return Window Expired</h3>
+                      </div>
+                      {expiredOrders.map(order => {
+                        const existingRefund = getRefundForOrder(order.id);
+                        const daysPassed = REFUND_WINDOW_DAYS - getRemainingDays(order.created_at);
+
+                        return (
+                          <div key={order.id} className="bg-surface-container-low border border-outline-variant p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 opacity-50">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className="w-14 h-16 bg-surface-container flex-none overflow-hidden">
+                                {order.products?.image_url ? (
+                                  <img src={order.products.image_url} alt={order.products.name} className="w-full h-full object-cover grayscale" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <ShoppingBag className="w-5 h-5 text-outline" strokeWidth={1} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-bold text-primary truncate max-w-[200px] md:max-w-[300px] uppercase tracking-wider">{order.products?.name || '—'}</h4>
+                                <p className="text-[10px] text-outline mt-1 uppercase tracking-widest">Order ID: #{order.id}</p>
+                                <div className="flex items-center gap-3 mt-2 text-[10px] text-outline uppercase tracking-widest">
+                                  <span>Qty: {order.quantity}</span>
+                                  <span>•</span>
+                                  <span className="font-bold text-primary">${fmt(order.total_price * 1.08)}</span>
+                                  <span>•</span>
+                                  <span>Purchased: {formatDate(order.created_at)}</span>
+                                </div>
+                                <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 text-[9px] uppercase tracking-widest font-bold bg-surface-container text-outline border border-outline-variant">
+                                  <XCircle className="w-3 h-3" strokeWidth={2} />
+                                  Expired — purchased {daysPassed} days ago
+                                </div>
+                              </div>
+                            </div>
+                            <div className="shrink-0 flex items-center justify-end">
+                              {existingRefund ? (
+                                <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[existingRefund.status] || STATUS_COLOR.pending}`}>
+                                  {STATUS_LABEL[existingRefund.status] || existingRefund.status}
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 text-[10px] uppercase tracking-widest font-bold bg-surface-container text-outline border border-outline-variant">
+                                  Not Eligible
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -345,9 +430,18 @@ export default function ReturnRefund() {
               <div className="min-w-0">
                 <p className="text-xs font-bold text-primary truncate uppercase tracking-wider">{selectedOrder.products?.name}</p>
                 <p className="text-[10px] text-outline mt-1 uppercase tracking-widest">
-                  Total Refundable Amount: <span className="font-bold text-primary">${fmt(selectedOrder.total_price)}</span>
+                  Total Refundable Amount: <span className="font-bold text-primary">${fmt(selectedOrder.total_price * 1.08)}</span>
                 </p>
               </div>
+            </div>
+
+            {/* Req 15 — info note about refund amount = purchase price */}
+            <div className="flex items-start gap-2.5 bg-surface p-3 border border-outline-variant/50">
+              <HelpCircle className="w-3.5 h-3.5 mt-0.5 text-outline flex-none" strokeWidth={1.5} />
+              <p className="text-[10px] text-outline leading-relaxed">
+                The refund amount equals the price you paid at the time of purchase <strong>including the 8% tax</strong>. If a discount was applied, you will receive back the discounted amount.
+                Returns must be requested within <span className="font-bold">{REFUND_WINDOW_DAYS} days</span> of purchase.
+              </p>
             </div>
 
             <form onSubmit={handleSubmitRefund} className="space-y-6">

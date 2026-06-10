@@ -67,6 +67,9 @@ router.post('/batch', authMiddleware, async (req, res) => {
         .gte('quantity', quantity)
         .select('quantity');
 
+      console.log(`[BATCH] updateError:`, updateError);
+      console.log(`[BATCH] updatedRows:`, updatedRows);
+
       if (updateError) throw updateError;
       if (!updatedRows || updatedRows.length === 0) {
         return res.status(400).json({
