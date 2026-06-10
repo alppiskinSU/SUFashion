@@ -13,10 +13,25 @@ const supabaseAuth = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
+// Validate and sanitize a string field
+const sanitize = (val) => (typeof val === 'string' ? val.trim() : '');
+const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
 // Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, home_address, tax_id } = req.body;
+    const name     = sanitize(req.body.name);
+    const email    = sanitize(req.body.email).toLowerCase();
+    const password = sanitize(req.body.password);
+    const home_address = sanitize(req.body.home_address);
+    const tax_id   = sanitize(req.body.tax_id);
+
+    if (!email || !isValidEmail(email))
+      return res.status(400).json({ error: 'A valid email address is required.' });
+    if (!password || password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    if (!name)
+      return res.status(400).json({ error: 'Name is required.' });
 
     // Create user via Supabase Auth (email_confirm: true skips email verification)
     const { data, error } = await supabase.auth.admin.createUser({
@@ -54,7 +69,7 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({ message: 'Registration successful' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred.' });
   }
 });
 
@@ -95,7 +110,7 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred.' });
   }
 });
 
