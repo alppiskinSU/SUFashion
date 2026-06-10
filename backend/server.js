@@ -14,6 +14,7 @@ app.use('/api/orders',   require('./routes/orderRoutes'));
 app.use('/api/invoices',   require('./routes/invoiceRoutes'));
 app.use('/api/favorites', require('./routes/favoriteRoutes'));
 app.use('/api/refunds',   require('./routes/refundRoutes'));
+app.use('/api/categories', require('./routes/categoryRoutes'));
 
 app.get('/', (_req, res) => res.json({ message: 'SUFashion API çalışıyor' }));
 

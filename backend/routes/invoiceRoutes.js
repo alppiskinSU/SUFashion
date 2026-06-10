@@ -62,7 +62,7 @@ const { requireRole } = require('../middleware/authMiddleware');
  * Returns every order in [from, to] enriched with customer + product names.
  * Accessible to admin only.
  */
-router.get('/admin/by-date', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
+router.get('/admin/by-date', authMiddleware, requireRole('admin', 'sales_manager', 'product_manager'), async (req, res) => {
     const { from, to } = req.query;
 
     if (!from || !to) {
@@ -176,6 +176,110 @@ router.get('/admin/revenue-summary', authMiddleware, requireRole('admin', 'sales
             },
         });
 
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/invoices/admin/profit-loss?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Req 11 — revenue and loss/profit between two dates, plus a daily series
+ * for the chart. Profit = revenue − cost of goods (products.cost × quantity),
+ * computed over non-cancelled orders in the range.
+ */
+router.get('/admin/profit-loss', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+        return res.status(400).json({
+            error: 'Both "from" and "to" query parameters are required (YYYY-MM-DD).',
+        });
+    }
+
+    const fromDate = new Date(from);
+    const toDate   = new Date(to);
+
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
+
+    toDate.setUTCHours(23, 59, 59, 999);
+
+    try {
+        const { data: orders, error } = await supabase
+            .from('orders')
+            .select('quantity, total_price, status, created_at, products(cost)')
+            .gte('created_at', fromDate.toISOString())
+            .lte('created_at', toDate.toISOString())
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: true });
+
+        if (error) return res.status(500).json({ error: error.message });
+
+        const byDay = new Map();
+        let grossRevenue = 0;
+        let totalCost    = 0;
+
+        for (const o of orders || []) {
+            const revenue = Number(o.total_price || 0);
+            const cost    = Number(o.products?.cost || 0) * Number(o.quantity || 0);
+            grossRevenue += revenue;
+            totalCost    += cost;
+
+            const day = o.created_at.slice(0, 10);
+            const row = byDay.get(day) || { date: day, revenue: 0, cost: 0, profit: 0 };
+            row.revenue += revenue;
+            row.cost    += cost;
+            row.profit   = row.revenue - row.cost;
+            byDay.set(day, row);
+        }
+
+        const round = (n) => Math.round(n * 100) / 100;
+        const netProfit = round(grossRevenue - totalCost);
+
+        res.json({
+            summary: {
+                from,
+                to,
+                gross_revenue: round(grossRevenue),
+                total_cost:    round(totalCost),
+                net_profit:    netProfit,
+                is_loss:       netProfit < 0,
+            },
+            series: [...byDay.values()].map(r => ({
+                date: r.date,
+                revenue: round(r.revenue),
+                cost:    round(r.cost),
+                profit:  round(r.profit),
+            })),
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/invoices/admin/:orderId/pdf
+ *
+ * Req 11 — sales manager (and product manager, Req 12) opens any invoice as a
+ * PDF to print or save. Same generator as the customer e-mail invoice.
+ */
+router.get('/admin/:orderId/pdf', authMiddleware, requireRole('admin', 'sales_manager', 'product_manager'), async (req, res) => {
+    try {
+        const { data: order, error } = await supabase
+            .from('orders')
+            .select('*, products(name, price)')
+            .eq('id', req.params.orderId)
+            .single();
+
+        if (error || !order) return res.status(404).json({ error: 'Order not found' });
+
+        const pdfBuffer = await generateInvoicePdf(order);
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="invoice-${order.id}.pdf"`);
+        res.send(pdfBuffer);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

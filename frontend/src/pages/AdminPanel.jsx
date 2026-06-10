@@ -13,6 +13,9 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { authFetch } from '../lib/authFetch';
 import StockManager from '../components/admin/StockManager';
+import PricingManager from '../components/admin/PricingManager';
+import ProductManager from '../components/admin/ProductManager';
+import CategoryManager from '../components/admin/CategoryManager';
 
 const STATUS_LABEL = {
   processing: 'Processing',
@@ -35,9 +38,46 @@ const NEXT_STATUS = {
 
 const fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+/* ── Req 10 — which tabs each manager role can see ──
+ * sales_manager:   pricing, invoices, refunds, revenue dashboard (Req 11, 15)
+ * product_manager: catalog, categories, stock, deliveries, orders, comments (Req 12)
+ * admin:           everything
+ */
+const TAB_ROLES = {
+  dashboard:  ['admin', 'sales_manager'],
+  comments:   ['admin', 'product_manager'],
+  orders:     ['admin', 'product_manager'],
+  deliveries: ['admin', 'product_manager'],
+  refunds:    ['admin', 'sales_manager'],
+  stock:      ['admin', 'product_manager'],
+  products:   ['admin', 'product_manager'],
+  categories: ['admin', 'product_manager'],
+  pricing:    ['admin', 'sales_manager'],
+  invoices:   ['admin', 'sales_manager', 'product_manager'],
+};
+
+const ROLE_TITLE = {
+  admin:           'Admin Panel',
+  sales_manager:   'Sales Manager Panel',
+  product_manager: 'Product Manager Panel',
+};
+
+function getStoredRole() {
+  try {
+    const raw = sessionStorage.getItem('user');
+    return raw ? JSON.parse(raw)?.role : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('dashboard');
+  const [role] = useState(getStoredRole);
+  const canSee = (tabKey) => (TAB_ROLES[tabKey] || []).includes(role);
+  const [tab, setTab] = useState(() =>
+    Object.keys(TAB_ROLES).find(key => (TAB_ROLES[key] || []).includes(getStoredRole())) || 'dashboard'
+  );
 
   /* ── Reviews state ── */
   const [reviews, setReviews] = useState([]);
@@ -79,6 +119,13 @@ export default function AdminPanel() {
   const [dashLoading,    setDashLoading]    = useState(false);
   const [dashError,      setDashError]      = useState('');
 
+  /* ── Profit/loss state (Req 11) ── */
+  const [plSummary,      setPlSummary]      = useState(null);
+  const [plSeries,       setPlSeries]       = useState([]);
+
+  /* ── Invoice PDF download (Req 11) ── */
+  const [pdfLoading,     setPdfLoading]     = useState(null);
+
   /* ── Toast ── */
   const [toast, setToast] = useState(null);
 
@@ -93,7 +140,7 @@ export default function AdminPanel() {
     if (!stored) { navigate('/login'); return; }
     try {
       const user = JSON.parse(stored);
-      if (user.role !== 'admin' && user.role !== 'sales_manager') { navigate('/'); return; }
+      if (!['admin', 'sales_manager', 'product_manager'].includes(user.role)) { navigate('/'); return; }
     } catch { navigate('/login'); }
   }, [navigate]);
 
@@ -219,22 +266,29 @@ export default function AdminPanel() {
     setDashError('');
     setDashSummary(null);
     setDashChart([]);
+    setPlSummary(null);
+    setPlSeries([]);
     try {
       const params = new URLSearchParams({ from: dashFrom, to: dashTo });
 
-      const [resSummary, resChart] = await Promise.all([
+      const [resSummary, resChart, resPl] = await Promise.all([
         authFetch(`http://localhost:3000/api/invoices/admin/revenue-summary?${params}`),
         authFetch(`http://localhost:3000/api/invoices/admin/revenue-chart?${params}`),
+        authFetch(`http://localhost:3000/api/invoices/admin/profit-loss?${params}`),
       ]);
 
       const dataSummary = await resSummary.json();
       const dataChart   = await resChart.json();
+      const dataPl      = await resPl.json();
 
       if (!resSummary.ok) throw new Error(dataSummary.error || 'Failed to load summary');
       if (!resChart.ok)   throw new Error(dataChart.error || 'Failed to load chart data');
+      if (!resPl.ok)      throw new Error(dataPl.error || 'Failed to load profit/loss data');
 
       setDashSummary(dataSummary.summary);
       setDashChart(dataChart.chartData ?? []);
+      setPlSummary(dataPl.summary ?? null);
+      setPlSeries(dataPl.series ?? []);
     } catch (err) {
       setDashError(err.message);
     } finally {
@@ -242,7 +296,34 @@ export default function AdminPanel() {
     }
   };
 
-  useEffect(() => { fetchReviews(); fetchOrders(); fetchDeliveries(); fetchRefunds(); }, []);
+  /* ── Open an invoice as PDF in a new tab — print or save from there (Req 11) ── */
+  const openInvoicePdf = async (invoiceId) => {
+    setPdfLoading(invoiceId);
+    try {
+      const res = await authFetch(`http://localhost:3000/api/invoices/admin/${invoiceId}/pdf`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not generate PDF');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  // Only fetch what this role's tabs need — avoids 403 noise for the others.
+  useEffect(() => {
+    if (canSee('comments'))   fetchReviews();
+    if (canSee('orders'))     fetchOrders();
+    if (canSee('deliveries')) fetchDeliveries();
+    if (canSee('refunds'))    fetchRefunds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refetch when the browser tab regains focus (no polling timer).
   useEffect(() => {
@@ -386,12 +467,12 @@ export default function AdminPanel() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
           <Shield className="w-5 h-5 text-primary" strokeWidth={1.5} />
-          <p className="text-[10px] uppercase tracking-[0.25em] text-outline font-bold">Admin Panel</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-outline font-bold">{ROLE_TITLE[role] || 'Admin Panel'}</p>
         </div>
         <h1 className="font-serif italic text-4xl md:text-5xl text-primary mb-10">Management</h1>
 
-        {/* Tabs */}
-        <div className="flex gap-0 border-b border-outline-variant mb-10">
+        {/* Tabs — filtered by role (Req 10) */}
+        <div className="flex flex-wrap gap-0 border-b border-outline-variant mb-10">
           {[
             { key: 'dashboard', label: 'Dashboard' },
             { key: 'comments',  label: `Comments (${reviews.length} pending)` },
@@ -399,8 +480,11 @@ export default function AdminPanel() {
             { key: 'deliveries', label: `Deliveries (${deliveries.filter(d => !d.completed).length} open)` },
             { key: 'refunds',  label: `Refunds (${refunds.filter(r => r.status === 'pending').length} pending)` },
             { key: 'stock',    label: 'Stock' },
+            { key: 'products', label: 'Products' },
+            { key: 'categories', label: 'Categories' },
+            { key: 'pricing',  label: 'Pricing' },
             { key: 'invoices', label: 'Invoices' },
-          ].map(t => (
+          ].filter(t => canSee(t.key)).map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -545,6 +629,65 @@ export default function AdminPanel() {
                       activeDot={{ r: 5 }}
                     />
                   </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Profit / Loss (Req 11) */}
+            {plSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                {[
+                  { label: 'Revenue (active orders)', value: `$${fmt(plSummary.gross_revenue)}`, color: 'text-primary' },
+                  { label: 'Cost of Goods', value: `$${fmt(plSummary.total_cost)}`, color: 'text-amber-700' },
+                  {
+                    label: plSummary.is_loss ? 'Net Loss' : 'Net Profit',
+                    value: `${plSummary.is_loss ? '−' : ''}$${fmt(Math.abs(plSummary.net_profit))}`,
+                    color: plSummary.is_loss ? 'text-red-500' : 'text-emerald-600',
+                  },
+                ].map(card => (
+                  <div key={card.label} className="bg-surface-container border border-outline-variant p-5 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className={`w-4 h-4 ${card.color}`} strokeWidth={1.5} />
+                      <p className="text-[10px] uppercase tracking-widest text-outline">{card.label}</p>
+                    </div>
+                    <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {plSeries.length > 0 && (
+              <div className="bg-surface-container border border-outline-variant p-6 mb-8">
+                <div className="flex items-center gap-2 mb-6">
+                  <DollarSign className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                  <h3 className="text-[11px] uppercase tracking-widest font-bold text-primary">Daily Profit / Loss</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={plSeries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#c4c7c7" strokeOpacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: '#747878' }}
+                      tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: '#747878' }} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#EDEAE9',
+                        border: '1px solid #c4c7c7',
+                        fontSize: 11,
+                        fontFamily: 'Outfit, sans-serif',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                      formatter={(value) => [`$${Number(value).toFixed(2)}`, undefined]}
+                      labelFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    />
+                    <Legend iconType="square" wrapperStyle={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
+                    <Bar dataKey="revenue" name="Revenue" fill="#2B2B2B" />
+                    <Bar dataKey="cost"    name="Cost"    fill="#d97706" />
+                    <Bar dataKey="profit"  name="Profit"  fill="#059669" />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
@@ -976,6 +1119,21 @@ export default function AdminPanel() {
           <StockManager onToast={showToast} />
         )}
 
+        {/* ── PRODUCTS TAB (Req 12) ── */}
+        {tab === 'products' && (
+          <ProductManager onToast={showToast} />
+        )}
+
+        {/* ── CATEGORIES TAB (Req 12) ── */}
+        {tab === 'categories' && (
+          <CategoryManager onToast={showToast} />
+        )}
+
+        {/* ── PRICING TAB (Req 11) ── */}
+        {tab === 'pricing' && (
+          <PricingManager onToast={showToast} />
+        )}
+
         {/* ── INVOICES TAB (SCRUM-110) ── */}
         {tab === 'invoices' && (
           <>
@@ -1058,6 +1216,7 @@ export default function AdminPanel() {
                       <th className="px-4 py-3 font-bold">Unit Price</th>
                       <th className="px-4 py-3 font-bold">Total</th>
                       <th className="px-4 py-3 font-bold">Status</th>
+                      <th className="px-4 py-3 font-bold text-right">PDF</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1074,6 +1233,17 @@ export default function AdminPanel() {
                           <span className={`px-2 py-0.5 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[inv.status] ?? STATUS_COLOR.processing}`}>
                             {STATUS_LABEL[inv.status] ?? inv.status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => openInvoicePdf(inv.invoice_id)}
+                            disabled={pdfLoading === inv.invoice_id}
+                            title="Open as PDF to print or save"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors disabled:opacity-50"
+                          >
+                            <FileText className="w-3 h-3" strokeWidth={1.5} />
+                            {pdfLoading === inv.invoice_id ? 'Opening…' : 'PDF'}
+                          </button>
                         </td>
                       </tr>
                     ))}
