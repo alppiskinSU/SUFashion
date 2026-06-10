@@ -223,7 +223,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const total_price = product.price * quantity;
 
-    // 3. Reduce the stock atomically
+    // 3. Reduce the stock atomically — only updates if stock is still sufficient,
+    //    preventing oversell under concurrent requests.
     const newQty = product.quantity - quantity;
     const { error: updateError, data: updatedRows } = await supabase
       .from('products')
@@ -234,7 +235,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (updateError) throw updateError;
     if (!updatedRows || updatedRows.length === 0) {
-      return res.status(400).json({ error: 'Not enough stock available' });
+      return res.status(409).json({ error: 'Stock changed during checkout, please try again.' });
     }
 
     // 4. Create the new order
