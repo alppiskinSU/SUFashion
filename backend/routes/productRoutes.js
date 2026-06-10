@@ -62,18 +62,37 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/products — admin only
-router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
+// GET /api/products/admin/pricing — sales manager pricing view (Req 11).
+// Includes the purchase cost, which is never exposed on the public endpoints.
+router.get('/admin/pricing', authMiddleware, requireRole('admin', 'sales_manager'), async (_req, res) => {
   try {
-    const { name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info } = req.body;
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, name, category, image_url, price, old_price, cost, quantity')
+      .order('name', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/products — product manager adds products (Req 12)
+router.post('/', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
+  try {
+    const { name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info, cost } = req.body;
 
     if (!name || !price) {
       return res.status(400).json({ error: 'name and price are required' });
     }
 
+    // Default purchase cost to 50% of sale price; sales manager can adjust it later
+    const resolvedCost = cost ?? Math.round(Number(price) * 50) / 100;
+
     const { data: product, error } = await supabase
       .from('products')
-      .insert([{ name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info }])
+      .insert([{ name, category, description, price, image_url, quantity, is_limited, old_price, model, serial_number, warranty_status, distributor_info, cost: resolvedCost }])
       .select()
       .single();
 
@@ -85,13 +104,21 @@ router.post('/', authMiddleware, requireRole('admin'), async (req, res) => {
   }
 });
 
-// PATCH /api/products/:id — admin only (used by the stock manager)
-// Only allow whitelisted columns to keep this endpoint focused.
-router.patch('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+// PATCH /api/products/:id — role-scoped product updates (Req 10/11/12):
+//   sales_manager   → pricing fields only (sets the prices, Req 11)
+//   product_manager → catalog/stock fields, but NOT prices (Req 12)
+//   admin           → everything
+const PRICING_FIELDS = ['price', 'old_price', 'cost'];
+const CATALOG_FIELDS = ['name', 'category', 'description', 'image_url',
+  'quantity', 'is_limited', 'model', 'serial_number',
+  'warranty_status', 'distributor_info', 'popularity'];
+
+router.patch('/:id', authMiddleware, requireRole('admin', 'sales_manager', 'product_manager'), async (req, res) => {
   try {
-    const allowed = ['name', 'category', 'description', 'price', 'image_url',
-      'quantity', 'is_limited', 'old_price', 'model', 'serial_number',
-      'warranty_status', 'distributor_info', 'popularity'];
+    const allowed =
+      req.userRole === 'sales_manager'   ? PRICING_FIELDS :
+      req.userRole === 'product_manager' ? CATALOG_FIELDS :
+      [...CATALOG_FIELDS, ...PRICING_FIELDS];
     const updates = {};
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body, key)) {
@@ -100,7 +127,7 @@ router.patch('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: 'No editable fields supplied.' });
+      return res.status(400).json({ error: 'No fields supplied that your role may edit.' });
     }
 
     if (updates.quantity !== undefined) {
@@ -127,8 +154,8 @@ router.patch('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   }
 });
 
-// DELETE /api/products/:id — admin only
-router.delete('/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+// DELETE /api/products/:id — product manager removes products (Req 12)
+router.delete('/:id', authMiddleware, requireRole('admin', 'product_manager'), async (req, res) => {
   try {
     const { error } = await supabase
       .from('products')
