@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Save, AlertTriangle, Search, Tags } from 'lucide-react';
+import { RefreshCw, Save, AlertTriangle, Search, Tags, Percent, Undo2 } from 'lucide-react';
 import { authFetch } from '../../lib/authFetch';
 
 const API_BASE = 'http://localhost:3000';
@@ -16,6 +16,11 @@ export default function PricingManager({ onToast }) {
   const [savingId, setSavingId] = useState(null);
   const [drafts, setDrafts]     = useState({}); // id -> { price, old_price, cost }
   const [search, setSearch]     = useState('');
+
+  /* ── Discount state (Req 11) ── */
+  const [selected, setSelected]         = useState(new Set());
+  const [discountRate, setDiscountRate] = useState('');
+  const [discountBusy, setDiscountBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -86,9 +91,73 @@ export default function PricingManager({ onToast }) {
     }
   };
 
+  /* ── Discount actions (Req 11) ── */
+  const toggleSelected = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const applyDiscount = async () => {
+    const rate = Number(discountRate);
+    if (!Number.isFinite(rate) || rate < 1 || rate > 90) {
+      onToast?.('error', 'Discount rate must be between 1 and 90 percent.');
+      return;
+    }
+    setDiscountBusy(true);
+    try {
+      const res = await authFetch(`${API_BASE}/api/products/admin/discount`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [...selected], discount_rate: rate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Discount failed');
+      onToast?.('approve', data.message);
+      setSelected(new Set());
+      setDiscountRate('');
+      await load();
+    } catch (err) {
+      onToast?.('error', err.message);
+    } finally {
+      setDiscountBusy(false);
+    }
+  };
+
+  const clearDiscount = async () => {
+    setDiscountBusy(true);
+    try {
+      const res = await authFetch(`${API_BASE}/api/products/admin/discount/clear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_ids: [...selected] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Clearing discount failed');
+      onToast?.('approve', data.message);
+      setSelected(new Set());
+      await load();
+    } catch (err) {
+      onToast?.('error', err.message);
+    } finally {
+      setDiscountBusy(false);
+    }
+  };
+
   const filtered = products.filter(p =>
     (p.name || '').toLowerCase().includes(search.trim().toLowerCase())
   );
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(p => selected.has(p.id));
+  const toggleAllFiltered = () => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      filtered.forEach(p => allFilteredSelected ? next.delete(p.id) : next.add(p.id));
+      return next;
+    });
+  };
 
   const moneyInput = (id, field, placeholder) => (
     <input
@@ -103,6 +172,40 @@ export default function PricingManager({ onToast }) {
 
   return (
     <section>
+      {/* Discount campaign bar (Req 11) */}
+      <div className="flex flex-wrap items-end gap-4 mb-6 p-6 bg-surface-container border border-outline-variant">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] uppercase tracking-widest text-outline font-bold" htmlFor="discount-rate">Discount %</label>
+          <input
+            id="discount-rate"
+            inputMode="numeric"
+            value={discountRate}
+            onChange={e => setDiscountRate(e.target.value.replace(/\D/g, ''))}
+            placeholder="e.g. 20"
+            className="w-28 px-3 py-2 border border-outline-variant bg-surface text-primary text-xs focus:outline-none focus:border-primary"
+          />
+        </div>
+        <button
+          onClick={applyDiscount}
+          disabled={discountBusy || selected.size === 0 || !discountRate}
+          className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
+        >
+          <Percent className="w-3.5 h-3.5" strokeWidth={2} />
+          {discountBusy ? 'Working…' : `Apply to ${selected.size} selected`}
+        </button>
+        <button
+          onClick={clearDiscount}
+          disabled={discountBusy || selected.size === 0}
+          className="flex items-center gap-2 px-6 py-2.5 border border-outline-variant text-primary text-[10px] uppercase tracking-widest font-bold hover:bg-surface-container-high transition-colors disabled:opacity-50"
+        >
+          <Undo2 className="w-3.5 h-3.5" strokeWidth={2} />
+          End discount
+        </button>
+        <p className="text-[10px] uppercase tracking-widest text-outline self-center">
+          Wishlist users are notified by e-mail automatically
+        </p>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-6">
         <div className="relative w-full sm:w-80">
@@ -147,6 +250,9 @@ export default function PricingManager({ onToast }) {
           <table className="w-full text-left">
             <thead>
               <tr className="text-[10px] uppercase tracking-widest text-outline border-b border-outline-variant">
+                <th className="py-3 pr-3">
+                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="cursor-pointer" />
+                </th>
                 <th className="py-3 pr-4">Product</th>
                 <th className="py-3 pr-4">Category</th>
                 <th className="py-3 pr-4">Unit Cost</th>
@@ -162,6 +268,14 @@ export default function PricingManager({ onToast }) {
                 const margin = d?.price && d?.cost ? Number(d.price) - Number(d.cost) : null;
                 return (
                   <tr key={p.id} className="border-b border-outline-variant/40 align-middle">
+                    <td className="py-4 pr-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(p.id)}
+                        onChange={() => toggleSelected(p.id)}
+                        className="cursor-pointer"
+                      />
+                    </td>
                     <td className="py-4 pr-4">
                       <div className="flex items-center gap-3">
                         {p.image_url ? (
@@ -169,7 +283,12 @@ export default function PricingManager({ onToast }) {
                         ) : (
                           <div className="w-10 h-12 bg-surface-container" />
                         )}
-                        <span className="text-xs font-bold text-primary">{p.name}</span>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-primary">{p.name}</span>
+                          {p.old_price != null && (
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-red-600">On Sale</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-4 pr-4 text-xs text-outline">{p.category || '—'}</td>
