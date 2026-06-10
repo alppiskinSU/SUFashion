@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
 const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
+const { sendDiscountNotification } = require('../utils/emailService');
 
 // Get all products - supports search, sort and category filter
 router.get('/', async (req, res) => {
@@ -73,6 +74,128 @@ router.get('/admin/pricing', authMiddleware, requireRole('admin', 'sales_manager
 
     if (error) return res.status(500).json({ error: error.message });
     res.json({ products });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/products/admin/discount — sales manager discounts selected items (Req 11).
+// Sets old_price to the original price, applies the new price, and notifies
+// every user whose wishlist (favorites) contains a discounted product.
+// Body: { product_ids: [..], discount_rate: 1-90 }
+router.post('/admin/discount', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
+  const { product_ids, discount_rate } = req.body;
+  const rate = Number(discount_rate);
+
+  if (!Array.isArray(product_ids) || product_ids.length === 0)
+    return res.status(400).json({ error: 'product_ids must be a non-empty array' });
+  if (!Number.isFinite(rate) || rate < 1 || rate > 90)
+    return res.status(400).json({ error: 'discount_rate must be between 1 and 90 (percent)' });
+
+  try {
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, name, price, old_price')
+      .in('id', product_ids);
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!products?.length) return res.status(404).json({ error: 'No matching products found' });
+
+    const updated = [];
+    for (const p of products) {
+      // Re-discounting an already-discounted item recalculates from the original price
+      const base = p.old_price ?? p.price;
+      const newPrice = Math.round(base * (100 - rate)) / 100;
+      const { data: row, error: upErr } = await supabase
+        .from('products')
+        .update({ price: newPrice, old_price: base })
+        .eq('id', p.id)
+        .select('id, name, price, old_price')
+        .single();
+      if (upErr) return res.status(500).json({ error: upErr.message });
+      updated.push(row);
+    }
+
+    // Notify wishlist users (failures logged, never block the discount)
+    let notified = 0;
+    try {
+      const ids = updated.map(p => p.id);
+      const { data: favs } = await supabase
+        .from('favorites')
+        .select('user_id, product_id')
+        .in('product_id', ids);
+
+      const byUser = new Map();
+      for (const f of favs || []) {
+        if (!byUser.has(f.user_id)) byUser.set(f.user_id, new Set());
+        byUser.get(f.user_id).add(f.product_id);
+      }
+
+      const productById = Object.fromEntries(updated.map(p => [p.id, p]));
+      for (const [userId, prodIds] of byUser) {
+        const { data: u } = await supabase.auth.admin.getUserById(userId);
+        const email = u?.user?.email;
+        if (!email) continue;
+        const { data: prof } = await supabase
+          .from('profiles').select('name').eq('id', userId).single();
+        const items = [...prodIds].map(pid => ({
+          name:     productById[pid].name,
+          oldPrice: productById[pid].old_price,
+          newPrice: productById[pid].price,
+        }));
+        const result = await sendDiscountNotification(email, {
+          customerName: prof?.name || 'Valued Customer',
+          discountRate: rate,
+          items,
+        });
+        if (result.success) notified++;
+      }
+    } catch (mailErr) {
+      console.error('[Discount] wishlist notification failed:', mailErr.message);
+    }
+
+    res.json({
+      message: `${rate}% discount applied to ${updated.length} product(s); ${notified} wishlist user(s) notified`,
+      products: updated,
+      notified,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/products/admin/discount/clear — sales manager ends a discount.
+// Restores price from old_price and clears the sale marker.
+router.post('/admin/discount/clear', authMiddleware, requireRole('admin', 'sales_manager'), async (req, res) => {
+  const { product_ids } = req.body;
+
+  if (!Array.isArray(product_ids) || product_ids.length === 0)
+    return res.status(400).json({ error: 'product_ids must be a non-empty array' });
+
+  try {
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, name, old_price')
+      .in('id', product_ids)
+      .not('old_price', 'is', null);
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!products?.length)
+      return res.status(404).json({ error: 'None of the selected products are on discount' });
+
+    const updated = [];
+    for (const p of products) {
+      const { data: row, error: upErr } = await supabase
+        .from('products')
+        .update({ price: p.old_price, old_price: null })
+        .eq('id', p.id)
+        .select('id, name, price, old_price')
+        .single();
+      if (upErr) return res.status(500).json({ error: upErr.message });
+      updated.push(row);
+    }
+
+    res.json({ message: `Discount removed from ${updated.length} product(s)`, products: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
