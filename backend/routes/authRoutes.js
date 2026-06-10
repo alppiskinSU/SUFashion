@@ -1,6 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
+const { createClient } = require('@supabase/supabase-js');
+
+// Dedicated client for password sign-in / token refresh. These calls attach
+// the resulting user session to the client they run on — if they ran on the
+// shared service-role client, every later DB query from any request would
+// execute as the last logged-in user (RLS) instead of as service role.
+const supabaseAuth = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
 // Register a new user
 router.post('/register', async (req, res) => {
@@ -52,7 +63,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
     if (error) return res.status(401).json({ error: error.message });
 
     let { data: profile } = await supabase
@@ -93,7 +104,7 @@ router.post('/refresh', async (req, res) => {
   const { refresh_token } = req.body;
   if (!refresh_token) return res.status(400).json({ error: 'Refresh token required' });
 
-  const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+  const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
   if (error || !data.session) return res.status(401).json({ error: 'Session expired, please log in again' });
 
   res.json({
