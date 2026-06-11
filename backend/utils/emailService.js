@@ -269,4 +269,63 @@ const sendDiscountNotification = async (toEmail, { customerName, discountRate, i
     }
 };
 
-module.exports = { sendInvoiceEmail, sendOrderConfirmation, sendDiscountNotification };
+/**
+ * Sends an email notification when a refund is approved.
+ *
+ * @param {string} toEmail
+ * @param {{ customerName: string, refundId: string, amount: number, orderId: string }} data
+ */
+const sendRefundApproval = async (toEmail, { customerName, refundId, amount, orderId }) => {
+    try {
+        const transporter = await getTransporter();
+
+        const html = `
+        <body style="margin:0;padding:0;background:#f5f1ef;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f1ef;padding:40px 0;">
+                <tr><td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;max-width:600px;width:100%;">
+                        <tr>
+                            <td style="background:#2B2B2B;padding:32px 40px;text-align:center;">
+                                <h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:0.3em;font-weight:300;text-transform:uppercase;">SUFASHION</h1>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:40px;">
+                                <p style="margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:0.2em;color:#166534;">Refund Approved</p>
+                                <h2 style="margin:0 0 24px;font-size:26px;color:#2B2B2B;font-weight:300;font-style:italic;">Hello, ${customerName}.</h2>
+                                <p style="margin:0 0 32px;font-size:14px;color:#747878;line-height:1.6;">
+                                    Your refund request <strong>#${refundId}</strong> for order <strong>#${orderId}</strong> has been approved. 
+                                    An amount of <strong>$${Number(amount).toFixed(2)}</strong> (including tax) is being refunded to your account.
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="background:#f5f1ef;padding:24px 40px;text-align:center;">
+                                <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:#747878;">SUFashion &mdash; Premium Fashion</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td></tr>
+            </table>
+        </body>`;
+
+        const info = await transporter.sendMail({
+            from: '"SUFashion" <no-reply@sufashion.com>',
+            to: toEmail,
+            subject: `Refund Approved — Request #${refundId}`,
+            text: `Hello ${customerName}, your refund request #${refundId} for order #${orderId} has been approved. Amount: $${Number(amount).toFixed(2)}.`,
+            html,
+        });
+
+        console.log('[Mail] Refund approval sent to %s — messageId: %s', toEmail, info.messageId);
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        if (previewUrl) console.log('[Mail] Preview: %s', previewUrl);
+
+        return { success: true, previewUrl };
+    } catch (error) {
+        console.error('[Mail] Refund approval notification failed:', error.message);
+        return { success: false, error: error.message };
+    }
+};
+
+module.exports = { sendInvoiceEmail, sendOrderConfirmation, sendDiscountNotification, sendRefundApproval };

@@ -133,6 +133,27 @@ router.patch('/:id/status', authMiddleware, requireRole('admin', 'sales_manager'
 
     if (updateErr) throw updateErr;
 
+    // Send email notification if approved
+    if (status === 'approved') {
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', updated.user_id)
+        .single();
+        
+      const { data: authUser } = await supabase.auth.admin.getUserById(updated.user_id);
+      
+      if (authUser?.data?.user?.email) {
+        const { sendRefundApproval } = require('../utils/emailService');
+        await sendRefundApproval(authUser.data.user.email, {
+          customerName: userProfile?.name || 'Customer',
+          refundId: updated.id,
+          amount: updated.amount,
+          orderId: updated.order_id
+        });
+      }
+    }
+
     res.json({ message: `Refund ${status}`, refund: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
