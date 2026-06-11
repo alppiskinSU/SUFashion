@@ -116,8 +116,7 @@ router.post('/admin/discount', authMiddleware, requireRole('admin', 'sales_manag
       updated.push(row);
     }
 
-    // Notify wishlist users (failures logged, never block the discount)
-    let notified = 0;
+    // Notify wishlist users asynchronously (fire-and-forget) to avoid blocking the response
     try {
       const ids = updated.map(p => p.id);
       const { data: favs } = await supabase
@@ -132,33 +131,44 @@ router.post('/admin/discount', authMiddleware, requireRole('admin', 'sales_manag
       }
 
       const productById = Object.fromEntries(updated.map(p => [p.id, p]));
-      for (const [userId, prodIds] of byUser) {
-        const { data: u } = await supabase.auth.admin.getUserById(userId);
-        const email = u?.user?.email;
-        if (!email) continue;
-        const { data: prof } = await supabase
-          .from('profiles').select('name').eq('id', userId).single();
-        const items = [...prodIds].map(pid => ({
-          name:     productById[pid].name,
-          oldPrice: productById[pid].old_price,
-          newPrice: productById[pid].price,
-        }));
-        const result = await sendDiscountNotification(email, {
-          customerName: prof?.name || 'Valued Customer',
-          discountRate: rate,
-          items,
+      
+      // Execute in background
+      (async () => {
+        const notifyPromises = Array.from(byUser.entries()).map(async ([userId, prodIds]) => {
+          const { data: u } = await supabase.auth.admin.getUserById(userId);
+          const email = u?.user?.email;
+          if (!email) return;
+          
+          const { data: prof } = await supabase
+            .from('profiles').select('name').eq('id', userId).single();
+            
+          const items = [...prodIds].map(pid => ({
+            name:     productById[pid].name,
+            oldPrice: productById[pid].old_price,
+            newPrice: productById[pid].price,
+          }));
+          
+          await sendDiscountNotification(email, {
+            customerName: prof?.name || 'Valued Customer',
+            discountRate: rate,
+            items,
+          });
         });
-        if (result.success) notified++;
-      }
+        
+        await Promise.allSettled(notifyPromises);
+      })().catch(err => console.error('[Discount] async notify error:', err));
+
+      res.json({
+        message: `${rate}% discount applied to ${updated.length} product(s). Notifications are being sent to ${byUser.size} users.`,
+        products: updated,
+      });
     } catch (mailErr) {
       console.error('[Discount] wishlist notification failed:', mailErr.message);
+      res.json({
+        message: `${rate}% discount applied to ${updated.length} product(s).`,
+        products: updated,
+      });
     }
-
-    res.json({
-      message: `${rate}% discount applied to ${updated.length} product(s); ${notified} wishlist user(s) notified`,
-      products: updated,
-      notified,
-    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
