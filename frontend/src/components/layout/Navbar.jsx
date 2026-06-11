@@ -102,9 +102,17 @@ export default function Navbar() {
                     </Link>
                   ) : (
                     <>
+                      <Link to="/my-profile" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                        <User className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        My Profile
+                      </Link>
                       <Link to="/my-orders" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
                         <Package className="w-3.5 h-3.5" strokeWidth={1.5} />
                         My Orders
+                      </Link>
+                      <Link to="/favorites" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
+                        <Heart className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        Wishlist
                       </Link>
                       <Link to="/refunds" className="flex items-center gap-2 px-5 py-3 text-[11px] uppercase tracking-widest text-primary hover:bg-surface-container-high transition-colors">
                         <ShoppingBag className="w-3.5 h-3.5" strokeWidth={1.5} />

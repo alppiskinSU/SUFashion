@@ -1,9 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { authFetch } from '../lib/authFetch';
-import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, XCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Package, Truck, CheckCircle, Clock, ChevronDown, ChevronUp, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
+
+/* ── Custom Confirm / Alert Modal ── */
+function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, variant = 'danger' }) {
+  if (!open) return null;
+  const isAlert = !onCancel; // alert-style: only one button
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-surface-container-low max-w-md w-full border border-outline-variant shadow-2xl p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-start gap-4">
+          <div className={`w-10 h-10 flex items-center justify-center flex-none ${
+            variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+          }`}>
+            <AlertTriangle className="w-5 h-5" strokeWidth={1.5} />
+          </div>
+          <div>
+            <h3 className="font-serif italic text-xl text-primary">{title}</h3>
+            <p className="text-sm text-outline mt-2 leading-relaxed font-sans">{message}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 pt-2">
+          {!isAlert && (
+            <button
+              onClick={onCancel}
+              className="px-6 py-2.5 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors"
+            >
+              {cancelLabel}
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className={`px-6 py-2.5 text-[10px] uppercase tracking-widest font-bold text-white transition-all ${
+              variant === 'danger'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-primary hover:brightness-95'
+            }`}
+          >
+            {isAlert ? 'OK' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Status config ── */
 const STATUS_STEPS = ['processing', 'in-transit', 'delivered'];
@@ -64,12 +107,14 @@ function StatusTimeline({ currentStatus }) {
 function OrderCard({ order, onRefresh }) {
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [alertMsg, setAlertMsg] = useState('');
   const uiStatus = normalizeOrderStatus(order.status);
   const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
   const raw = order.status || 'processing';
 
   const cancelOrder = async () => {
-    if (!window.confirm('Cancel this order? Stock will be returned.')) return;
+    setShowCancelConfirm(false);
     setUpdating(true);
     try {
       const res = await authFetch(`http://localhost:3000/api/orders/${order.id}/cancel`, {
@@ -79,7 +124,7 @@ function OrderCard({ order, onRefresh }) {
       if (!res.ok) throw new Error(data.error || 'Cancel failed');
       await onRefresh?.();
     } catch (e) {
-      alert(e.message || 'Could not cancel order');
+      setAlertMsg(e.message || 'Could not cancel order');
     } finally {
       setUpdating(false);
     }
@@ -87,6 +132,24 @@ function OrderCard({ order, onRefresh }) {
 
   return (
     <div className="bg-surface-container-low">
+      <ConfirmModal
+        open={showCancelConfirm}
+        title="Cancel Order"
+        message="Are you sure you want to cancel this order? The stock will be returned and this action cannot be undone."
+        confirmLabel="Yes, Cancel Order"
+        cancelLabel="Keep Order"
+        onConfirm={cancelOrder}
+        onCancel={() => setShowCancelConfirm(false)}
+        variant="danger"
+      />
+      <ConfirmModal
+        open={!!alertMsg}
+        title="Order Error"
+        message={alertMsg}
+        confirmLabel="OK"
+        onConfirm={() => setAlertMsg('')}
+        variant="danger"
+      />
 
       {/* Card header */}
       <div
@@ -125,7 +188,7 @@ function OrderCard({ order, onRefresh }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
-            <p className="text-sm text-primary">{order.created_at ? new Date(order.created_at).toLocaleDateString() : '—'}</p>
+            <p className="text-sm text-primary">{order.created_at ? new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</p>
           </div>
           <div className="hidden sm:block">
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Total</p>
@@ -162,7 +225,7 @@ function OrderCard({ order, onRefresh }) {
               <button
                 type="button"
                 disabled={updating}
-                onClick={e => { e.stopPropagation(); cancelOrder(); }}
+                onClick={e => { e.stopPropagation(); setShowCancelConfirm(true); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <XCircle className="w-3.5 h-3.5" strokeWidth={2} />
@@ -225,12 +288,14 @@ function OrderCard({ order, onRefresh }) {
 function OrderGroupCard({ group, onRefresh }) {
   const [expanded, setExpanded] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [alertMsg, setAlertMsg] = useState('');
   const uiStatus = normalizeOrderStatus(group.status);
   const cfg = statusConfig[uiStatus] ?? statusConfig.processing;
   const raw = group.status || 'processing';
 
   const cancelGroup = async () => {
-    if (!window.confirm('Cancel this entire order? Stock will be returned for all items.')) return;
+    setShowCancelConfirm(false);
     setUpdating(true);
     const failures = [];
     try {
@@ -244,10 +309,10 @@ function OrderGroupCard({ group, onRefresh }) {
       }
       await onRefresh?.();
       if (failures.length > 0) {
-        alert(`Some items could not be cancelled:\n${failures.join('\n')}`);
+        setAlertMsg(`Some items could not be cancelled: ${failures.join(', ')}`);
       }
     } catch (e) {
-      alert(e.message || 'Could not cancel order.');
+      setAlertMsg(e.message || 'Could not cancel order.');
     } finally {
       setUpdating(false);
     }
@@ -258,6 +323,24 @@ function OrderGroupCard({ group, onRefresh }) {
 
   return (
     <div className="bg-surface-container-low">
+      <ConfirmModal
+        open={showCancelConfirm}
+        title="Cancel Entire Order"
+        message="Are you sure you want to cancel this entire order? Stock will be returned for all items and this action cannot be undone."
+        confirmLabel="Yes, Cancel All"
+        cancelLabel="Keep Order"
+        onConfirm={cancelGroup}
+        onCancel={() => setShowCancelConfirm(false)}
+        variant="danger"
+      />
+      <ConfirmModal
+        open={!!alertMsg}
+        title="Order Error"
+        message={alertMsg}
+        confirmLabel="OK"
+        onConfirm={() => setAlertMsg('')}
+        variant="danger"
+      />
 
       {/* Card header */}
       <div
@@ -290,7 +373,7 @@ function OrderGroupCard({ group, onRefresh }) {
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Date</p>
-            <p className="text-sm text-primary">{group.created_at ? new Date(group.created_at).toLocaleDateString() : '—'}</p>
+            <p className="text-sm text-primary">{group.created_at ? new Date(group.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</p>
           </div>
           <div className="hidden sm:block">
             <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Total</p>
@@ -324,7 +407,7 @@ function OrderGroupCard({ group, onRefresh }) {
               <button
                 type="button"
                 disabled={updating}
-                onClick={e => { e.stopPropagation(); cancelGroup(); }}
+                onClick={e => { e.stopPropagation(); setShowCancelConfirm(true); }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-[10px] uppercase tracking-widest font-bold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 <XCircle className="w-3.5 h-3.5" strokeWidth={2} />

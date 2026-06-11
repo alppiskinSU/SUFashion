@@ -9,6 +9,49 @@ const EMPTY_FORM = {
   quantity: '0', model: '', serial_number: '', warranty_status: '', distributor_info: '',
 };
 
+/* ── Custom Confirm / Alert Modal ── */
+function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, variant = 'danger' }) {
+  if (!open) return null;
+  const isAlert = !onCancel;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-surface-container-low max-w-md w-full border border-outline-variant shadow-2xl p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-start gap-4">
+          <div className={`w-10 h-10 flex items-center justify-center flex-none ${
+            variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+          }`}>
+            <AlertTriangle className="w-5 h-5" strokeWidth={1.5} />
+          </div>
+          <div>
+            <h3 className="font-serif italic text-xl text-primary">{title}</h3>
+            <p className="text-sm text-outline mt-2 leading-relaxed font-sans">{message}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 pt-2">
+          {!isAlert && (
+            <button
+              onClick={onCancel}
+              className="px-6 py-2.5 border border-outline-variant text-[10px] uppercase tracking-widest font-bold text-primary hover:bg-surface-container-high transition-colors"
+            >
+              {cancelLabel}
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className={`px-6 py-2.5 text-[10px] uppercase tracking-widest font-bold text-white transition-all ${
+              variant === 'danger'
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-primary hover:brightness-95'
+            }`}
+          >
+            {isAlert ? 'OK' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Req 12 — product manager adds/removes products.
  * New products are created via POST /api/products; the category dropdown is
@@ -23,6 +66,7 @@ export default function ProductManager({ onToast }) {
   const [form, setForm]             = useState(EMPTY_FORM);
   const [creating, setCreating]     = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [productToDelete, setProductToDelete] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -90,8 +134,10 @@ export default function ProductManager({ onToast }) {
     }
   };
 
-  const handleDelete = async (product) => {
-    if (!window.confirm(`Remove "${product.name}" from the catalog?`)) return;
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+    const product = productToDelete;
+    setProductToDelete(null);
     setDeletingId(product.id);
     try {
       const res = await authFetch(`${API_BASE}/api/products/${product.id}`, { method: 'DELETE' });
@@ -116,6 +162,17 @@ export default function ProductManager({ onToast }) {
 
   return (
     <section>
+      <ConfirmModal
+        open={!!productToDelete}
+        title="Remove Product"
+        message={`Are you sure you want to remove "${productToDelete?.name}" from the catalog? This action cannot be undone.`}
+        confirmLabel="Yes, Remove"
+        cancelLabel="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setProductToDelete(null)}
+        variant="danger"
+      />
+
       {/* Add product form */}
       <form onSubmit={handleCreate} className="p-6 bg-surface-container border border-outline-variant mb-10">
         <div className="flex items-center gap-2 mb-6">
@@ -241,7 +298,7 @@ export default function ProductManager({ onToast }) {
                   <td className="py-4 pr-4 text-xs text-primary">{p.quantity ?? 0}</td>
                   <td className="py-4 text-right">
                     <button
-                      onClick={() => handleDelete(p)}
+                      onClick={() => setProductToDelete(p)}
                       disabled={deletingId === p.id}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-[10px] uppercase tracking-widest font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
                     >

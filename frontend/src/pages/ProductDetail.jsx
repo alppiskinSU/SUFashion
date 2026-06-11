@@ -466,7 +466,7 @@ export default function ProductDetail() {
                     <StarDisplay rating={r.rating} />
                     <span className="text-xs font-bold text-primary">{r.user_name}</span>
                     <span className="text-xs text-outline">
-                      {new Date(r.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                      {new Date(r.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                   {r.comment ? (

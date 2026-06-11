@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle, XCircle, Star, Clock,
-  AlertTriangle, Inbox, Package, Truck, ChevronRight, RefreshCw, MapPin,
+  AlertTriangle, Inbox, Package, Truck, ChevronRight, ChevronDown, ChevronUp, RefreshCw, MapPin,
   FileText, BarChart3, DollarSign, TrendingUp, RotateCcw,
 } from 'lucide-react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import Navbar from '../components/layout/Navbar';
@@ -90,6 +90,7 @@ export default function AdminPanel() {
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
   const [statusLoading, setStatusLoading] = useState(null);
+  const [expandedOrders, setExpandedOrders] = useState({});
 
   /* ── Deliveries state (Req 12) ── */
   const [deliveries, setDeliveries] = useState([]);
@@ -350,34 +351,22 @@ export default function AdminPanel() {
     return () => controller.abort();
   }, [tab]);
 
-  /* ── Mark delivery completed (transitions through shipped if needed) ── */
-  const markDeliveryCompleted = async (delivery) => {
-    setDelActionLoading(delivery.delivery_id);
+  /* ── Delivery Status Update ── */
+  const handleDeliveryStatusUpdate = async (deliveryId, newStatus) => {
+    setDelActionLoading(deliveryId);
     try {
-      // Status state machine only allows processing→shipped→delivered, so step
-      // through 'shipped' first if necessary.
-      if (delivery.status === 'processing') {
-        const r1 = await authFetch(`http://localhost:3000/api/orders/${delivery.delivery_id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'shipped' }),
-        });
-        if (!r1.ok) {
-          const d = await r1.json();
-          throw new Error(d.error || 'Failed to ship');
-        }
-      }
-      const r2 = await authFetch(`http://localhost:3000/api/orders/${delivery.delivery_id}/status`, {
+      const res = await authFetch(`http://localhost:3000/api/orders/${deliveryId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'delivered' }),
+        body: JSON.stringify({ status: newStatus }),
       });
-      if (!r2.ok) {
-        const d = await r2.json();
-        throw new Error(d.error || 'Failed to mark delivered');
-      }
-      await fetchDeliveries();
-      showToast('approve', `Delivery #${delivery.delivery_id} completed`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      setDeliveries(prev => prev.map(d =>
+        d.delivery_id === deliveryId ? { ...d, status: data.order?.status ?? newStatus, completed: (data.order?.status ?? newStatus) === 'delivered' } : d
+      ));
+      showToast('approve', `Delivery updated to ${STATUS_LABEL[data.order?.status ?? newStatus]}`);
     } catch (err) {
       showToast('error', err.message);
     } finally {
@@ -818,9 +807,14 @@ export default function AdminPanel() {
                       const firstImg = entry.items[0]?.products?.image_url;
                       const names = entry.items.map(i => i.products?.name ?? '—').join(', ');
                       return (
-                        <div key={entry.groupId} className="bg-surface-container border border-outline-variant p-6 md:p-8">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                            {/* First product image */}
+                        <div key={entry.groupId} className="bg-surface-container border border-outline-variant flex flex-col mb-4">
+                          {/* Card Header (Clickable) */}
+                          <div 
+                            className="p-6 md:p-8 cursor-pointer hover:bg-surface-container-high transition-colors"
+                            onClick={() => setExpandedOrders(prev => ({ ...prev, [entry.groupId]: !prev[entry.groupId] }))}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                              {/* First product image */}
                             <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
                               {firstImg
                                 ? <img src={firstImg} alt="Order" className="w-full h-full object-cover" />
@@ -851,31 +845,51 @@ export default function AdminPanel() {
                               <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[entry.status] ?? STATUS_COLOR.processing}`}>
                                 {STATUS_LABEL[entry.status] ?? entry.status}
                               </span>
-                              {next && (
-                                <button
-                                  onClick={() => handleGroupStatusUpdate(entry.groupId, next.value)}
-                                  disabled={statusLoading === entry.groupId}
-                                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
-                                >
-                                  {statusLoading === entry.groupId
-                                    ? <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
-                                    : <><Truck className="w-3.5 h-3.5" strokeWidth={2} /><ChevronRight className="w-3 h-3" strokeWidth={2} /></>
-                                  }
-                                  {next.label}
-                                </button>
-                              )}
+                              <button className="p-1 text-outline hover:text-primary transition-colors">
+                                {expandedOrders[entry.groupId] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                              </button>
                             </div>
                           </div>
                         </div>
+                        {/* Expanded Content */}
+                        {expandedOrders[entry.groupId] && (
+                          <div className="border-t border-outline-variant p-6 md:p-8 bg-surface-container-low animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              <div>
+                                <h4 className="text-[10px] uppercase tracking-widest text-outline font-bold mb-3">Shipping Details</h4>
+                                <div className="space-y-2">
+                                  <p className="text-sm text-primary"><span className="text-outline text-xs uppercase tracking-widest font-bold mr-2">Address:</span> {entry.items?.[0]?.shipping_address || '—'}</p>
+                                  <p className="text-sm text-primary"><span className="text-outline text-xs uppercase tracking-widest font-bold mr-2">Customer ID:</span> {entry.items?.[0]?.user_id || '—'}</p>
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="text-[10px] uppercase tracking-widest text-outline font-bold mb-3">Items in Order</h4>
+                                <div className="space-y-2">
+                                  {entry.items.map(item => (
+                                    <div key={item.id} className="flex justify-between items-center text-sm border-b border-outline-variant/30 pb-2 last:border-0">
+                                      <span className="text-primary">{item.products?.name} <span className="text-outline text-[10px] ml-1">x{item.quantity}</span></span>
+                                      <span className="text-primary font-medium">${fmt(item.total_price)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       );
                     }
 
                     // Single (ungrouped) order
                     const next = NEXT_STATUS[entry.status];
                     return (
-                      <div key={entry.id} className="bg-surface-container border border-outline-variant p-6 md:p-8">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                          <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
+                      <div key={entry.id} className="bg-surface-container border border-outline-variant flex flex-col mb-4">
+                        <div 
+                          className="p-6 md:p-8 cursor-pointer hover:bg-surface-container-high transition-colors"
+                          onClick={() => setExpandedOrders(prev => ({ ...prev, [entry.id]: !prev[entry.id] }))}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="w-12 h-14 bg-surface flex-none overflow-hidden">
                             {entry.products?.image_url
                               ? <img src={entry.products.image_url} alt={entry.products.name} className="w-full h-full object-cover" />
                               : <Package className="w-5 h-5 text-outline m-auto mt-3" strokeWidth={1} />
@@ -903,22 +917,36 @@ export default function AdminPanel() {
                             <span className={`px-3 py-1 text-[10px] uppercase tracking-widest font-bold ${STATUS_COLOR[entry.status] ?? STATUS_COLOR.processing}`}>
                               {STATUS_LABEL[entry.status] ?? entry.status}
                             </span>
-                            {next && (
-                              <button
-                                onClick={() => handleStatusUpdate(entry.id, next.value)}
-                                disabled={statusLoading === entry.id}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 transition-all disabled:opacity-50"
-                              >
-                                {statusLoading === entry.id
-                                  ? <Clock className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
-                                  : <><Truck className="w-3.5 h-3.5" strokeWidth={2} /><ChevronRight className="w-3 h-3" strokeWidth={2} /></>
-                                }
-                                {next.label}
-                              </button>
-                            )}
+                            <button className="p-1 text-outline hover:text-primary transition-colors">
+                              {expandedOrders[entry.id] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
                           </div>
                         </div>
                       </div>
+                      {/* Expanded Content */}
+                      {expandedOrders[entry.id] && (
+                        <div className="border-t border-outline-variant p-6 md:p-8 bg-surface-container-low animate-in fade-in slide-in-from-top-2 duration-200">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div>
+                              <h4 className="text-[10px] uppercase tracking-widest text-outline font-bold mb-3">Shipping Details</h4>
+                              <div className="space-y-2">
+                                <p className="text-sm text-primary"><span className="text-outline text-xs uppercase tracking-widest font-bold mr-2">Address:</span> {entry.shipping_address || '—'}</p>
+                                <p className="text-sm text-primary"><span className="text-outline text-xs uppercase tracking-widest font-bold mr-2">Customer ID:</span> {entry.user_id || '—'}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="text-[10px] uppercase tracking-widest text-outline font-bold mb-3">Item Detail</h4>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center text-sm border-b border-outline-variant/30 pb-2">
+                                  <span className="text-primary">{entry.products?.name} <span className="text-outline text-[10px] ml-1">x{entry.quantity}</span></span>
+                                  <span className="text-primary font-medium">${fmt(entry.total_price)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     );
                   });
                 })()}
@@ -999,9 +1027,9 @@ export default function AdminPanel() {
                           }
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {!d.completed && (
+                          {!d.completed && NEXT_STATUS[d.status] && (
                             <button
-                              onClick={() => markDeliveryCompleted(d)}
+                              onClick={() => handleDeliveryStatusUpdate(d.delivery_id, NEXT_STATUS[d.status].value)}
                               disabled={delActionLoading === d.delivery_id}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-[10px] uppercase tracking-widest font-bold hover:brightness-95 disabled:opacity-50"
                             >
@@ -1009,7 +1037,7 @@ export default function AdminPanel() {
                                 ? <Clock className="w-3 h-3 animate-spin" strokeWidth={2} />
                                 : <Truck className="w-3 h-3" strokeWidth={2} />
                               }
-                              Mark Completed
+                              {NEXT_STATUS[d.status].value === 'shipped' ? 'Mark In Transit' : 'Mark Delivered'}
                             </button>
                           )}
                         </td>

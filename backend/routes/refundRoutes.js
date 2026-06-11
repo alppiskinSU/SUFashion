@@ -143,9 +143,9 @@ router.patch('/:id/status', authMiddleware, requireRole('admin', 'sales_manager'
         
       const { data: authUser } = await supabase.auth.admin.getUserById(updated.user_id);
       
-      if (authUser?.data?.user?.email) {
+      if (authUser?.user?.email) {
         const { sendRefundApproval } = require('../utils/emailService');
-        await sendRefundApproval(authUser.data.user.email, {
+        await sendRefundApproval(authUser.user.email, {
           customerName: userProfile?.name || 'Customer',
           refundId: updated.id,
           amount: updated.amount,

@@ -300,16 +300,41 @@ router.get('/admin/revenue-chart', authMiddleware, requireRole('admin', 'sales_m
     }
 
     try {
-        const { data, error } = await supabase
-            .from('revenue_tracking')
-            .select('*')
-            .gte('date', from)
-            .lte('date', to)
-            .order('date', { ascending: true });
+        const fromDate = new Date(from);
+        const toDate   = new Date(to);
+        toDate.setUTCHours(23, 59, 59, 999);
+
+        const { data: orders, error } = await supabase
+            .from('orders')
+            .select('total_price, status, created_at')
+            .gte('created_at', fromDate.toISOString())
+            .lte('created_at', toDate.toISOString())
+            .order('created_at', { ascending: true });
 
         if (error) return res.status(500).json({ error: error.message });
 
-        res.json({ chartData: data || [] });
+        const byDay = new Map();
+        
+        for (const o of orders || []) {
+            const day = o.created_at.slice(0, 10);
+            const row = byDay.get(day) || { date: day, daily_revenue: 0, daily_refunds: 0 };
+            
+            const amount = Number(o.total_price || 0);
+            if (o.status === 'cancelled') {
+                row.daily_refunds += amount;
+            } else {
+                row.daily_revenue += amount;
+            }
+            byDay.set(day, row);
+        }
+
+        const chartData = [...byDay.values()].map(r => ({
+            date: r.date,
+            daily_revenue: Math.round(r.daily_revenue * 100) / 100,
+            daily_refunds: Math.round(r.daily_refunds * 100) / 100,
+        }));
+
+        res.json({ chartData });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

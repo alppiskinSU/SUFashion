@@ -150,6 +150,12 @@ export default function OrderConfirmation() {
                   <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Items</p>
                   <p className="text-primary">{orders.reduce((s, o) => s + (o.quantity || 0), 0)}</p>
                 </div>
+                {orders[0]?.shipping_address && (
+                  <div className="col-span-2">
+                    <p className="text-[10px] uppercase tracking-widest text-outline mb-1">Shipping Address</p>
+                    <p className="text-primary">{orders[0].shipping_address}</p>
+                  </div>
+                )}
               </div>
             </section>
 

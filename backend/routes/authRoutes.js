@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db');
 const { createClient } = require('@supabase/supabase-js');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
 // Dedicated client for password sign-in / token refresh. These calls attach
 // the resulting user session to the client they run on — if they ran on the
@@ -126,6 +127,96 @@ router.post('/refresh', async (req, res) => {
     token: data.session.access_token,
     refreshToken: data.session.refresh_token,
   });
+});
+
+// GET /api/auth/profile — fetch current user's profile
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, name, home_address, tax_id, role, created_at')
+      .eq('id', userId)
+      .single();
+
+    if (error || !profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    res.json({
+      profile: {
+        id: profile.id,
+        name: profile.name || '',
+        email: userEmail,
+        home_address: profile.home_address || '',
+        tax_id: profile.tax_id || '',
+        role: profile.role || 'customer',
+        created_at: profile.created_at,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/auth/profile — update current user's profile
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, home_address, tax_id, password } = req.body;
+
+    // Update profile fields in profiles table
+    const updates = {};
+    if (name !== undefined) updates.name = sanitize(name);
+    if (home_address !== undefined) updates.home_address = sanitize(home_address);
+    if (tax_id !== undefined) updates.tax_id = sanitize(tax_id);
+
+    if (Object.keys(updates).length > 0) {
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+      if (profileErr) {
+        return res.status(500).json({ error: 'Failed to update profile: ' + profileErr.message });
+      }
+    }
+
+    // Update password if provided (via Supabase Auth admin API)
+    if (password && password.length >= 6) {
+      const { error: pwErr } = await supabase.auth.admin.updateUserById(userId, { password });
+      if (pwErr) {
+        return res.status(400).json({ error: 'Failed to update password: ' + pwErr.message });
+      }
+    } else if (password && password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    // Also update the name in session storage on the client side
+    // by returning the updated profile
+    const { data: updatedProfile } = await supabase
+      .from('profiles')
+      .select('id, name, home_address, tax_id, role, created_at')
+      .eq('id', userId)
+      .single();
+
+    res.json({
+      message: 'Profile updated successfully',
+      profile: {
+        id: updatedProfile.id,
+        name: updatedProfile.name || '',
+        email: req.user.email,
+        home_address: updatedProfile.home_address || '',
+        tax_id: updatedProfile.tax_id || '',
+        role: updatedProfile.role || 'customer',
+        created_at: updatedProfile.created_at,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
