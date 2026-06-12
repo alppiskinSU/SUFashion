@@ -14,7 +14,7 @@ const supabaseAuth = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-// Validate and sanitize a string field
+// Step 7 (Feature 16 — defensive): trim/sanitize registration input; reject bad email or short password
 const sanitize = (val) => (typeof val === 'string' ? val.trim() : '');
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
