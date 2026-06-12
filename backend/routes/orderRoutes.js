@@ -1,3 +1,6 @@
+// Step 7 (Feature 17 — Concurrency): checkout paths use conditional stock UPDATE
+// (.gte quantity) plus rollbackStocks() so concurrent buyers cannot oversell and
+// partial batch failures do not leave inventory inconsistent.
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -6,6 +9,7 @@ const { authMiddleware, requireRole } = require('../middleware/authMiddleware');
 const { sendOrderConfirmation } = require('../utils/emailService');
 
 /* ── Helper: restore stock for already-decremented items on batch failure ── */
+// Step 7 — defensive rollback when a later item in the batch fails after stock was decremented
 async function rollbackStocks(rollbacks) {
   for (const { pid, originalQty } of rollbacks) {
     try {
@@ -22,6 +26,7 @@ async function rollbackStocks(rollbacks) {
  */
 const VALID_STATUSES = ['processing', 'shipped', 'delivered', 'cancelled'];
 const STATUS_ALIASES = { 'in-transit': 'shipped' };
+// Step 7 (Feature 16 — defensive): illegal status jumps are rejected server-side
 const ALLOWED_TRANSITIONS = {
   'processing': ['shipped', 'cancelled'],
   'shipped':    ['delivered', 'cancelled'],
