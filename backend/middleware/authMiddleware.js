@@ -1,3 +1,5 @@
+// Step 7 (Feature 16 — Security): every protected route validates JWT; requireRole
+// enforces customer / product_manager / sales_manager separation (403 if wrong role).
 const { supabase } = require('../db');
 
 // Checks if the user has a valid Supabase token
