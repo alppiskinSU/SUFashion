@@ -1,3 +1,5 @@
+// Step 7 (Feature 17 — Concurrency): parallel 401 responses share one in-flight refresh
+// so concurrent API calls do not race and invalidate the refresh token.
 const BASE = 'http://localhost:3000';
 
 // Mutex: only one refresh in flight at a time.
