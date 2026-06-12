@@ -1,3 +1,5 @@
+// Step 7 (Feature 16 — Security): HTTP hardening via helmet, strict CORS, and
+// auth rate limiting before route handlers run.
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
